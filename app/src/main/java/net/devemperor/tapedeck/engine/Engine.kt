@@ -21,6 +21,7 @@ import net.devemperor.tapedeck.data.Settings
 import net.devemperor.tapedeck.data.Storage
 import net.devemperor.tapedeck.data.UpdateChannel
 import java.io.File
+import java.util.concurrent.ConcurrentHashMap
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.minutes
 
@@ -169,8 +170,16 @@ object Engine {
         val request = YoutubeDLRequest(entry.url)
             .addOption("--cache-dir", cacheDir(context).absolutePath)
             .addCommands(YtDlpArgs.download(entry.options, dir.absolutePath, sponsorBlock))
-        return withYtDlp {
-            YoutubeDL.execute(request, entry.id) { _, _, line -> onLine(line) }
+        // Every attempt gets its own process id: youtubedl-android 0.18.1 leaves the id of a failed run in
+        // its process map, so a retry under the entry's id would stop at once with "Process ID already exists".
+        val processId = "${entry.id}#${System.nanoTime()}"
+        processIds[entry.id] = processId
+        try {
+            return withYtDlp {
+                YoutubeDL.execute(request, processId) { _, _, line -> onLine(line) }
+            }
+        } finally {
+            processIds.remove(entry.id, processId)
         }
     }
 
@@ -183,8 +192,11 @@ object Engine {
         return InfoJson.parsePlaylist(response.out)
     }
 
+    /** Entry id → process id of its running yt-dlp. */
+    private val processIds = ConcurrentHashMap<String, String>()
+
     fun cancel(id: String) {
-        YoutubeDL.destroyProcessById(id)
+        processIds[id]?.let(YoutubeDL::destroyProcessById)
     }
 
     private fun cacheDir(context: Context) = File(context.noBackupFilesDir, "ytdlp-cache").apply { mkdirs() }

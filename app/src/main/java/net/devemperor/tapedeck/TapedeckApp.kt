@@ -13,6 +13,7 @@ import net.devemperor.tapedeck.data.Library
 import net.devemperor.tapedeck.data.Settings
 import net.devemperor.tapedeck.download.Downloads
 import net.devemperor.tapedeck.download.NetworkMonitor
+import net.devemperor.tapedeck.engine.AppUpdates
 import net.devemperor.tapedeck.engine.Engine
 import net.devemperor.tapedeck.engine.Preview
 import net.devemperor.tapedeck.work.Maintenance
@@ -39,6 +40,8 @@ class TapedeckApp : Application(), SingletonImageLoader.Factory {
         private set
     lateinit var preview: Preview
         private set
+    lateinit var appUpdates: AppUpdates
+        private set
 
     val http: OkHttpClient by lazy {
         OkHttpClient.Builder()
@@ -54,6 +57,7 @@ class TapedeckApp : Application(), SingletonImageLoader.Factory {
         downloads = Downloads(this, scope)
         network = NetworkMonitor(this)
         preview = Preview(http)
+        appUpdates = AppUpdates(http, settings)
         Notifications.createChannels(this)
         Maintenance.schedule(this)
         // Unpacking Python and FFmpeg only; updates happen when the activity opens (MainViewModel.onAppOpened).

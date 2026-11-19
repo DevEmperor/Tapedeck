@@ -199,6 +199,7 @@ class DownloadService : LifecycleService() {
         val media = files.filter { isFinalMedia(it) }.maxByOrNull { it.length() }
             ?: throw IllegalStateException("yt-dlp finished without a media file")
         val cover = files.firstOrNull { it.name.startsWith(YtDlpArgs.COVER_BASENAME + ".") }
+        cover?.let { runCatching { Covers.trimLetterbox(it) } }
         val info = readInfo(id)
         // Intermediate formats, the info JSON and anything else yt-dlp left behind.
         files.filter { it != media && it != cover }.forEach { it.delete() }
@@ -239,10 +240,11 @@ class DownloadService : LifecycleService() {
             // The connection dropped: wait for it and continue from the partial file.
             error.kind == ErrorKind.NETWORK && !networkOk ->
                 app.library.update(id) { it.copy(state = DownloadState.WAITING_NETWORK) }
-            // A passing 403, or YouTube changed something: back into the queue for one more try, and
+            // A passing 403, or YouTube changed something: back into the queue for another try, and
             // fetch the newest yt-dlp meanwhile if the app is open (never in the background). The retry
-            // waits for that update by itself (Engine gate).
-            error.mayBeFixedByUpdate && entry.autoRetries == 0 -> {
+            // waits for that update by itself (Engine gate). A 403 gets two tries: on 19.11.2026 three of
+            // eight downloads in a row hit one, and each went through on the next attempt.
+            error.mayBeFixedByUpdate && entry.autoRetries < (if (error.kind == ErrorKind.BLOCKED) 2 else 1) -> {
                 app.library.update(id) { it.copy(state = DownloadState.QUEUED, autoRetries = it.autoRetries + 1) }
                 if (settings.autoUpdate && AppVisibility.foreground && Engine.isRetryUpdateWorthwhile(app.settings)) {
                     app.scope.launch { Engine.update(app, app.settings) }
@@ -272,7 +274,7 @@ class DownloadService : LifecycleService() {
     private fun formatLabel(entry: Entry, media: File, info: MediaInfo?): String {
         val ext = media.extension.uppercase()
         return when (entry.options.kind) {
-            MediaKind.VIDEO -> listOfNotNull(info?.height?.let { "${it}p" }, ext).joinToString(" · ")
+            MediaKind.VIDEO -> listOfNotNull(info?.resolutionClass?.let { "${it}p" }, ext).joinToString(" · ")
             MediaKind.AUDIO -> {
                 val durationSec = (info?.durationMs ?: entry.durationMs) / 1000.0
                 val kbit = if (durationSec > 0) (media.length() * 8 / durationSec / 1000).roundToInt() else null

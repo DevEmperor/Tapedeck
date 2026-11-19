@@ -55,6 +55,16 @@ class EngineLogicTest {
     }
 
     @Test
+    fun `names wide films by their resolution class and drops placeholder chapters`() {
+        val wide = InfoJson.parse("""{"title":"Cosmos","width":1920,"height":858,"chapters":[{"start_time":0,"title":"<Untitled Chapter 1>"},{"start_time":60,"title":"<Untitled Chapter 2>"}]}""")
+        assertEquals(1080, wide.resolutionClass)
+        assertTrue(wide.chapters.isEmpty())
+        assertEquals(720, InfoJson.parse("""{"width":1280,"height":536}""").resolutionClass)
+        assertEquals(480, InfoJson.parse("""{"width":640,"height":480}""").resolutionClass)
+        assertEquals(1080, InfoJson.parse("""{"width":1080,"height":1920}""").resolutionClass)
+    }
+
+    @Test
     fun `reads a flat playlist`() {
         val playlist = InfoJson.parsePlaylist(
             """{"_type":"playlist","title":"Römer","entries":[

@@ -43,6 +43,7 @@ import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.DoneAll
 import androidx.compose.material.icons.rounded.ErrorOutline
 import androidx.compose.material.icons.rounded.MoreVert
+import androidx.compose.material.icons.rounded.NewReleases
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.PushPin
@@ -53,8 +54,10 @@ import androidx.compose.material.icons.rounded.SaveAlt
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.Share
+import androidx.compose.material.icons.rounded.SystemUpdate
 import androidx.compose.material.icons.rounded.Timer
 import androidx.compose.material.icons.rounded.WifiOff
+import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExtendedFloatingActionButton
@@ -67,6 +70,7 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
@@ -103,6 +107,7 @@ import net.devemperor.tapedeck.data.DownloadState
 import net.devemperor.tapedeck.data.Entry
 import net.devemperor.tapedeck.data.LibrarySort
 import net.devemperor.tapedeck.data.MediaKind
+import net.devemperor.tapedeck.engine.AppInstallState
 import net.devemperor.tapedeck.engine.Engine
 import net.devemperor.tapedeck.engine.ErrorKind
 import net.devemperor.tapedeck.engine.LiveProgress
@@ -158,6 +163,7 @@ fun LibraryScreen(vm: MainViewModel, onOpenPlayer: () -> Unit, onOpenSettings: (
                 )
             }
             item(key = "engine") { EngineBanner(engine) }
+            item(key = "app-update") { AppUpdateBanner(vm) }
             if (downloads.isNotEmpty()) {
                 item(key = "downloads-header") { SectionHeader(stringResource(R.string.section_downloads), downloads.size) }
                 items(downloads, key = { "d-" + it.id }) { entry ->
@@ -311,6 +317,96 @@ private fun EngineBanner(status: Engine.Status) {
                 if (!failed) {
                     Spacer(Modifier.height(10.dp))
                     LinearProgressIndicator(modifier = Modifier.fillMaxWidth().clip(CircleShape))
+                }
+            }
+        }
+    }
+}
+
+/**
+ * "Tapedeck 0.3.0 is out": Install downloads the APK for this phone with a progress bar and hands it to
+ * Android's installer. The steps in between (allowing installs once, the download, the installer) show
+ * right here.
+ */
+@Composable
+private fun AppUpdateBanner(vm: MainViewModel) {
+    val available by vm.appUpdate.collectAsStateWithLifecycle()
+    val install by vm.appInstall.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+    val uriHandler = LocalUriHandler.current
+    // Keeps the content while the banner animates away.
+    var shown by remember { mutableStateOf(available) }
+    if (available != null) shown = available
+    AnimatedVisibility(available != null, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
+        val release = shown ?: return@AnimatedVisibility
+        val onContainer = MaterialTheme.colorScheme.onPrimaryContainer
+        Surface(
+            shape = MaterialTheme.shapes.large,
+            color = MaterialTheme.colorScheme.primaryContainer,
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
+        ) {
+            Column(Modifier.padding(16.dp).animateContentSize()) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Rounded.NewReleases, null, tint = onContainer)
+                    Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(stringResource(R.string.app_update_title, release.version), style = MaterialTheme.typography.titleSmall, color = onContainer)
+                        val body = when (val state = install) {
+                            AppInstallState.NeedsPermission -> stringResource(R.string.app_update_permission)
+                            is AppInstallState.Downloading -> stringResource(
+                                R.string.app_update_downloading,
+                                Format.bytes(context, state.bytes),
+                                Format.bytes(context, state.total.coerceAtLeast(state.bytes)),
+                            )
+                            AppInstallState.Installing -> stringResource(R.string.app_update_installing)
+                            is AppInstallState.Failed -> stringResource(R.string.app_update_failed)
+                            AppInstallState.Idle -> stringResource(R.string.app_update_body)
+                        }
+                        Text(
+                            body,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (install is AppInstallState.Failed) MaterialTheme.colorScheme.error else onContainer.copy(alpha = 0.8f),
+                        )
+                    }
+                }
+                when (val state = install) {
+                    is AppInstallState.Downloading -> {
+                        Spacer(Modifier.height(12.dp))
+                        TapeProgressBar(fraction = if (state.total > 0) state.bytes.toFloat() / state.total else null)
+                    }
+                    AppInstallState.Installing -> {
+                        Spacer(Modifier.height(12.dp))
+                        TapeProgressBar(fraction = null)
+                    }
+                    else -> Unit
+                }
+                Spacer(Modifier.height(8.dp))
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
+                    when (install) {
+                        is AppInstallState.Downloading -> {
+                            TextButton(onClick = vm::cancelAppUpdate) { Text(stringResource(R.string.cancel), color = onContainer) }
+                        }
+                        // Android says nothing when its dialog is tapped away, so offer to bring it back.
+                        AppInstallState.Installing -> {
+                            TextButton(onClick = vm::cancelAppUpdate) { Text(stringResource(R.string.cancel), color = onContainer) }
+                            TextButton(onClick = vm::installAppUpdate) { Text(stringResource(R.string.app_update_reopen), color = onContainer) }
+                        }
+                        AppInstallState.NeedsPermission -> {
+                            TextButton(onClick = vm::dismissAppUpdate) { Text(stringResource(R.string.later), color = onContainer) }
+                            Button(onClick = { context.startActivity(vm.installPermissionIntent()) }) { Text(stringResource(R.string.app_update_allow)) }
+                        }
+                        else -> {
+                            TextButton(onClick = vm::dismissAppUpdate) { Text(stringResource(R.string.later), color = onContainer) }
+                            TextButton(onClick = { runCatching { uriHandler.openUri(release.pageUrl) } }) {
+                                Text(stringResource(R.string.whats_new), color = onContainer)
+                            }
+                            Button(onClick = vm::installAppUpdate) {
+                                Icon(Icons.Rounded.SystemUpdate, null, Modifier.size(18.dp))
+                                Spacer(Modifier.width(6.dp))
+                                Text(stringResource(if (install is AppInstallState.Failed) R.string.retry else R.string.app_update_install))
+                            }
+                        }
+                    }
                 }
             }
         }

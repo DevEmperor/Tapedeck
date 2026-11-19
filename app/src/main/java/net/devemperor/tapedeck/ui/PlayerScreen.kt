@@ -119,7 +119,7 @@ fun PlayerScreen(vm: MainViewModel, onClose: () -> Unit) {
         return
     }
 
-    Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+    Box(Modifier.fillMaxSize().blockTouchesBelow().background(MaterialTheme.colorScheme.background)) {
         val cover = entry.thumbnailFile?.let(::File)?.takeIf { it.exists() }
         if (cover != null) {
             AsyncImage(cover, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize().blur(70.dp).alpha(0.45f))

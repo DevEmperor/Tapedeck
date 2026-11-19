@@ -39,6 +39,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.path
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -130,6 +131,16 @@ fun TapeProgressBar(fraction: Float?, modifier: Modifier = Modifier, active: Boo
                 )
             }
         }
+    }
+}
+
+/**
+ * For screens laid over the library (player, settings): touches on their empty areas would otherwise
+ * fall through to the list below and start or open whatever card sits there.
+ */
+fun Modifier.blockTouchesBelow(): Modifier = pointerInput(Unit) {
+    awaitPointerEventScope {
+        while (true) awaitPointerEvent()
     }
 }
 

@@ -29,6 +29,7 @@ import net.devemperor.tapedeck.data.Entry
 import net.devemperor.tapedeck.data.ShareAction
 import net.devemperor.tapedeck.data.Storage
 import net.devemperor.tapedeck.download.NewDownload
+import net.devemperor.tapedeck.engine.AppInstallState
 import net.devemperor.tapedeck.engine.Engine
 import net.devemperor.tapedeck.engine.Links
 import net.devemperor.tapedeck.engine.Playlist
@@ -249,6 +250,51 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     /** The only place a regular yt-dlp update starts. In the app scope, so leaving the app mid-update does not cut it off. */
     fun onAppOpened() {
         app.scope.launch { Engine.updateIfDue(app, app.settings) }
+        app.scope.launch { app.appUpdates.checkIfDue() }
+        // Back from the "Install unknown apps" switch: carry on with the update by itself.
+        if (appInstall.value == AppInstallState.NeedsPermission && app.appUpdates.canInstall(app)) installAppUpdate()
+    }
+
+    /** A newer Tapedeck on GitHub, until "Later" puts it away. */
+    val appUpdate = app.appUpdates.available
+    val appInstall: StateFlow<AppInstallState> = app.appUpdates.install
+    private var installJob: Job? = null
+
+    fun dismissAppUpdate() {
+        installJob?.cancel()
+        app.appUpdates.dismiss()
+    }
+
+    /** Downloads the new APK and hands it to Android's installer; Tapedeck is ended once it is in place. */
+    fun installAppUpdate() {
+        val release = appUpdate.value ?: return
+        if (installJob?.isActive == true) return
+        installJob = app.scope.launch { app.appUpdates.downloadAndInstall(app, release) }
+    }
+
+    fun cancelAppUpdate() {
+        installJob?.cancel()
+        app.appUpdates.reset(app)
+    }
+
+    fun installPermissionIntent(): Intent = app.appUpdates.permissionIntent(app)
+
+    fun takePendingInstallConfirmation(): Intent? = app.appUpdates.takePendingConfirmation()
+
+    private val _checkingApp = MutableStateFlow(false)
+    val checkingApp: StateFlow<Boolean> = _checkingApp.asStateFlow()
+
+    /** "Check now" in the settings: asks GitHub right away and says what it found. */
+    fun checkAppUpdateNow() {
+        if (_checkingApp.value) return
+        viewModelScope.launch {
+            _checkingApp.value = true
+            // Asked for explicitly, so a version put away with "Later" counts again.
+            app.settings.updateEngine { it.copy(dismissedAppVersion = null) }
+            val found = app.appUpdates.check()
+            _checkingApp.value = false
+            if (found == null) message { it.getString(R.string.app_up_to_date) }
+        }
     }
 
     private fun message(render: (Context) -> String) {

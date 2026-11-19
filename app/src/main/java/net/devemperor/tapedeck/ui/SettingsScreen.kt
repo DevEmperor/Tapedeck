@@ -70,13 +70,15 @@ fun SettingsScreen(vm: MainViewModel, onBack: () -> Unit) {
     val version by vm.engineVersion.collectAsStateWithLifecycle()
     val meta by vm.engineMeta.collectAsStateWithLifecycle()
     val updating by vm.updating.collectAsStateWithLifecycle()
+    val appUpdate by vm.appUpdate.collectAsStateWithLifecycle()
+    val checkingApp by vm.checkingApp.collectAsStateWithLifecycle()
     val used by vm.usedBytes.collectAsStateWithLifecycle()
     val entries by vm.entries.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val uriHandler = LocalUriHandler.current
     val defaults = settings.defaults
 
-    Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).statusBarsPadding()) {
+    Column(Modifier.fillMaxSize().blockTouchesBelow().background(MaterialTheme.colorScheme.background).statusBarsPadding()) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, stringResource(R.string.back)) }
             Spacer(Modifier.width(4.dp))
@@ -185,7 +187,18 @@ fun SettingsScreen(vm: MainViewModel, onBack: () -> Unit) {
             }
             item {
                 Group(R.string.group_about) {
-                    InfoRow(stringResource(R.string.app_name), BuildConfig.VERSION_NAME)
+                    val newer = appUpdate?.version
+                    InfoRow(
+                        stringResource(R.string.app_name),
+                        if (newer != null) stringResource(R.string.app_version_available, BuildConfig.VERSION_NAME, newer) else BuildConfig.VERSION_NAME,
+                    )
+                    SwitchRow(R.string.setting_check_app_updates, R.string.setting_check_app_updates_sub, settings.checkAppUpdates) { on ->
+                        vm.updateSettings { it.copy(checkAppUpdates = on) }
+                    }
+                    ActionRow(
+                        stringResource(R.string.app_check_now), null,
+                        trailing = { if (checkingApp) CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp) },
+                    ) { vm.checkAppUpdateNow() }
                     ActionRow(stringResource(R.string.source_code), SOURCE_URL.removePrefix("https://"), trailing = {
                         Icon(Icons.AutoMirrored.Rounded.OpenInNew, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
                     }) { runCatching { uriHandler.openUri(SOURCE_URL) } }

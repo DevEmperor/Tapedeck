@@ -47,6 +47,8 @@ data class AppSettings(
     val updateChannel: UpdateChannel = UpdateChannel.NIGHTLY,
     /** Checked whenever the app is opened, never in the background. */
     val autoUpdate: Boolean = true,
+    /** Tapedeck is not on Play, so it looks on GitHub for a newer release itself (when opened). */
+    val checkAppUpdates: Boolean = true,
 ) {
     val autoDeleteAfterDays: Int get() = autoDeleteDays.coerceIn(AUTO_DELETE_MIN_DAYS, AUTO_DELETE_MAX_DAYS)
 
@@ -64,6 +66,10 @@ data class EngineMeta(
     val lastCheckAt: Long = 0,
     val lastUpdateAt: Long = 0,
     val lastError: String? = null,
+    /** When GitHub was last asked for a newer Tapedeck. */
+    val lastAppCheckAt: Long = 0,
+    /** A Tapedeck version whose hint the user put away with "Later"; the next one shows again. */
+    val dismissedAppVersion: String? = null,
 )
 
 class Settings(context: Context) {
