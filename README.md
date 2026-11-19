@@ -44,8 +44,9 @@ Share a video from the YouTube app → Tapedeck → *Download*. That's it.
 
 Tapedeck is not on Google Play: Play does not allow apps that download from YouTube (see
 *Device and Network Abuse* in the Play policy). Build it yourself, or install an APK from the
-[releases](https://github.com/DevEmperor/Tapedeck/releases) and pick the one for your phone's ABI
-(`arm64-v8a` for almost every phone of the last years).
+[releases](https://github.com/DevEmperor/Tapedeck/releases): the **universal** APK runs on every phone;
+the smaller per-processor APKs carry only one set of native libraries (`arm64-v8a` fits almost every phone
+of the last years).
 
 Android Auto shows apps that were not installed from Play only after turning on *Unknown sources* in
 Android Auto's developer settings.
@@ -56,7 +57,7 @@ Requires JDK 21 and the Android SDK (compileSdk 37).
 
 ```bash
 ./gradlew :app:assembleDebug -Ptapedeck.abis=arm64-v8a   # one ABI, for your phone
-./gradlew :app:assembleRelease                           # arm64-v8a, armeabi-v7a, x86_64
+./gradlew :app:assembleRelease                           # universal + arm64-v8a, armeabi-v7a, x86, x86_64
 ./gradlew :app:testDebugUnitTest
 ```
 

@@ -21,10 +21,11 @@ val keystoreProperties = rootProject.file("keystore.properties").takeIf { it.exi
     Properties().apply { file.inputStream().use(::load) }
 }
 
-// Python, FFmpeg and QuickJS ship as native binaries per ABI (~45 MB each), so every ABI gets its own
-// APK. `-Ptapedeck.abis=x86_64` limits a development build to the emulator's ABI.
-val targetAbis = (findProperty("tapedeck.abis") as String?)?.split(",")?.map(String::trim)
-    ?: listOf("arm64-v8a", "armeabi-v7a", "x86_64")
+// Python, FFmpeg and QuickJS ship as native binaries per ABI (~50 MB each). A full build makes one APK
+// per ABI plus a universal APK with all four, which installs on any phone (about four times the size).
+// `-Ptapedeck.abis=x86_64` limits a development build to the emulator's ABI and skips the universal one.
+val abiOverride = (findProperty("tapedeck.abis") as String?)?.split(",")?.map(String::trim)
+val targetAbis = abiOverride ?: listOf("arm64-v8a", "armeabi-v7a", "x86", "x86_64")
 
 kotlin {
     compilerOptions {
@@ -49,7 +50,7 @@ android {
             isEnable = true
             reset()
             include(*targetAbis.toTypedArray())
-            isUniversalApk = false
+            isUniversalApk = abiOverride == null
         }
     }
 
