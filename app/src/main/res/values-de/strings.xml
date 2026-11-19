@@ -159,7 +159,41 @@
     <string name="fullscreen">Vollbild</string>
     <string name="fullscreen_exit">Vollbild beenden</string>
     <string name="chapters">Kapitel</string>
-    <string name="skip_silence_short">Stille überspringen</string>
+    <string name="playback_title">Wiedergabe</string>
+    <string name="playback_speed">Tempo</string>
+    <string name="playback_repeat">Wiederholen</string>
+    <string name="repeat_off">Aus</string>
+    <string name="repeat_all">Alle</string>
+    <string name="repeat_one">Diesen</string>
+    <string name="playback_shuffle">Zufällige Reihenfolge</string>
+    <string name="playback_shuffle_sub">Spielt die Warteschlange gemischt</string>
+    <string name="from_mixtape">Mixtape „%s“</string>
+    <string name="done">Fertig</string>
+
+    <!-- Mixtapes -->
+    <string name="mixtapes">Mixtapes</string>
+    <string name="mixtape_new">Neues Mixtape</string>
+    <string name="mixtape_new_dots">Neues Mixtape…</string>
+    <string name="mixtape_new_named">Neues Mixtape „%s“</string>
+    <string name="mixtape_create">Anlegen</string>
+    <string name="mixtape_name">Name</string>
+    <string name="mixtape_rename">Umbenennen</string>
+    <string name="mixtape_delete">Mixtape löschen</string>
+    <string name="mixtape_delete_title">„%s“ löschen?</string>
+    <string name="mixtape_delete_body">Nur das Mixtape verschwindet; die Downloads bleiben in deiner Bibliothek.</string>
+    <string name="mixtape_shuffle">Zufällig</string>
+    <string name="mixtape_empty">Noch leer. Lege Downloads über ihr Menü (⋮ → Auf Mixtape…) hierher oder wähle das Mixtape schon beim Herunterladen.</string>
+    <string name="mixtape_not_ready">Noch nicht heruntergeladen</string>
+    <string name="mixtape_move">Verschieben</string>
+    <string name="mixtape_remove">Vom Mixtape nehmen</string>
+    <string name="mixtape_pick_title">Auf Mixtape</string>
+    <string name="mixtape_add">Auf Mixtape…</string>
+    <string name="mixtape_on">Auf Mixtape</string>
+    <string name="mixtape_none">Keins</string>
+    <plurals name="mixtape_titles">
+        <item quantity="one">%d Titel</item>
+        <item quantity="other">%d Titel</item>
+    </plurals>
     <string name="close">Schließen</string>
     <string name="back">Zurück</string>
 

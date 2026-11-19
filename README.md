@@ -64,7 +64,7 @@ stopped.
 
 <table>
   <tr>
-    <td align="center"><img src="docs/images/library.png" width="190" alt="The library: downloads with thumbnails, length, format and size, what is new or heard, and the mini player at the bottom"></td>
+    <td align="center"><img src="docs/images/library.png" width="190" alt="The library: two mixtapes as cassettes on a shelf, then the downloads with thumbnails, source, length, format and size, and the mini player at the bottom"></td>
     <td align="center"><img src="docs/images/share.png" width="190" alt="The new-download sheet after sharing a link: title and picture, audio or video, and the resolution"></td>
     <td align="center"><img src="docs/images/downloading.png" width="190" alt="A video downloading in 1080p with percent, speed and time left"></td>
     <td align="center"><img src="docs/images/player.png" width="190" alt="The player: cover, chapter, seek bar, back and forward 10 seconds, speed, skip silence and chapters"></td>
@@ -74,6 +74,11 @@ stopped.
     <td align="center"><img src="docs/images/notification.png" width="190" alt="The media notification with cover, play and pause, back and forward 10 seconds"></td>
     <td align="center"><img src="docs/images/formats.png" width="190" alt="Choosing a format like yt-dlp -F: cards with resolution, codecs, size and bitrate; 1080p60 VP9 is picked and gets AAC sound to go with it"></td>
     <td align="center"><img src="docs/images/settings.png" width="190" alt="Settings: offer copied links, SponsorBlock, and own sections for audio (format, quality) and video (format, resolution)"></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/images/mixtape.png" width="190" alt="The mixtape Road trip: a teal cassette, Play and Shuffle, and its three films in order with drag handles; the first one is playing"></td>
+    <td align="center"><img src="docs/images/mixtape-add.png" width="190" alt="Putting a download on mixtapes: tick boxes for Blender Open Movies and Road trip, or start a new mixtape"></td>
+    <td align="center"><img src="docs/images/playback.png" width="190" alt="The playback menu in the player: speed from 0.75× to 2×, repeat off, all or this one, shuffle and skip silence"></td>
   </tr>
 </table>
 
@@ -133,9 +138,10 @@ stopped.
 - **The car's play button resumes the last download**, even after Android closed the app.
 - **Pauses for navigation announcements** instead of talking over them.
 - **Keeps playing** the next download in the library's order — sort *oldest first* for a lecture series.
-- **Android Auto** shows *Continue*, *New* and *All downloads*.
-- Speed from 0.75× to 2×, **skip silence**, **chapters**, and full-screen video with its own controls
-  for when you are parked.
+- **Android Auto** shows *Continue*, *Mixtapes*, *New* and *All downloads*.
+- One **playback menu** at the top of the player: speed from 0.75× to 2×, **repeat** (all or this one),
+  **shuffle** and **skip silence**; it lights up when something differs from the usual.
+- **Chapters**, and full-screen video with its own controls for when you are parked.
 - **Full screen with gestures**: double tap left or right for −10 / +10 s (keep tapping for more), or
   press and slide sideways to scrub — both show how far you jump. A double tap on the video, or on the
   mini player, goes straight to full screen.
@@ -143,10 +149,22 @@ stopped.
   back in the player (with *Auto-rotate* on, as in other video apps).
 - **Upright videos stay upright**: a reel or Short fills the player in its own shape, and its full
   screen is upright too.
-
-<p align="center"><img src="docs/images/gestures.png" width="760" alt="Full-screen video: a double tap and two more taps on the right show +30 s, and sliding sideways shows +0:30 and the target time 1:11 of 10:34"></p>
 - **Swipe Tapedeck away** in the recent apps and everything stops — playback and downloads. Unfinished
   downloads continue from where they were the next time you open it.
+
+<p align="center"><img src="docs/images/gestures.png" width="760" alt="Full-screen video: a double tap and two more taps on the right show +30 s, and sliding sideways shows +0:30 and the target time 1:11 of 10:34"></p>
+
+### Mixtapes
+
+- **Your own playlists, as cassettes.** Put downloads on mixtapes — music for the drive, a lecture
+  series, the kids' favourites. They sit on a shelf above the library, each in its own colour, and their
+  reels turn while one of them plays.
+- **One after the other**: *Play* runs a mixtape in its order, *Shuffle* mixes it, and with *Repeat* it
+  starts over. Drag a song by its handle to move it; a download can be on several mixtapes.
+- **Straight onto a mixtape** when downloading — and a whole YouTube playlist can become a new mixtape
+  of its own name, in the playlist's order.
+- Songs on a mixtape are never removed by the automatic clean-up. Deleting a mixtape keeps its downloads.
+- In **Android Auto**, every mixtape is a folder; picking a song plays the mixtape from there.
 
 ### Keeping your phone tidy
 

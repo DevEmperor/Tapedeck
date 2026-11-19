@@ -203,7 +203,7 @@ class PlaybackService : MediaLibraryService() {
             pageSize: Int,
             params: LibraryParams?,
         ): ListenableFuture<LibraryResult<ImmutableList<MediaItem>>> {
-            val children = MediaItems.children(this@PlaybackService, parentId, app.library.entries.value, app.settings.current)
+            val children = MediaItems.children(this@PlaybackService, parentId, app.library.entries.value, app.library.mixtapes.value, app.settings.current)
                 ?: return Futures.immediateFuture(LibraryResult.ofError(SessionError.ERROR_BAD_VALUE))
             val paged = if (pageSize > 0) children.drop(page * pageSize).take(pageSize) else children
             return Futures.immediateFuture(LibraryResult.ofItemList(paged, params))
@@ -214,7 +214,7 @@ class PlaybackService : MediaLibraryService() {
             browser: MediaSession.ControllerInfo,
             mediaId: String,
         ): ListenableFuture<LibraryResult<MediaItem>> {
-            val entry = app.library[mediaId]?.takeIf { it.isDone }
+            val entry = app.library[MediaItems.entryId(mediaId)]?.takeIf { it.isDone }
                 ?: return Futures.immediateFuture(LibraryResult.ofError(SessionError.ERROR_BAD_VALUE))
             return Futures.immediateFuture(LibraryResult.ofItem(MediaItems.from(entry), null))
         }
@@ -223,8 +223,10 @@ class PlaybackService : MediaLibraryService() {
             mediaSession: MediaSession,
             controller: MediaSession.ControllerInfo,
             mediaItems: MutableList<MediaItem>,
-        ): ListenableFuture<MutableList<MediaItem>> =
-            Futures.immediateFuture(resolve(mediaItems).map { MediaItems.from(it) }.toMutableList())
+        ): ListenableFuture<MutableList<MediaItem>> {
+            val mixtape = mediaItems.firstNotNullOfOrNull(MediaItems::mixtapeOf)
+            return Futures.immediateFuture(resolve(mediaItems).map { MediaItems.from(it, mixtapeId = mixtape) }.toMutableList())
+        }
 
         override fun onSetMediaItems(
             mediaSession: MediaSession,
@@ -233,12 +235,21 @@ class PlaybackService : MediaLibraryService() {
             startIndex: Int,
             startPositionMs: Long,
         ): ListenableFuture<MediaSession.MediaItemsWithStartPosition> {
+            // Played from a mixtape (in the app, or from its folder in the car): the queue keeps saying so.
+            val mixtape = mediaItems.firstNotNullOfOrNull(MediaItems::mixtapeOf)?.let(app.library::mixtape)
             var entries = resolve(mediaItems)
             var index = startIndex.coerceIn(0, (entries.size - 1).coerceAtLeast(0))
-            // Android Auto hands over a single item: queue what follows it, like the app does.
+            // Android Auto hands over a single item: queue what follows it — in the mixtape it was picked
+            // from, else in the library — like the app does.
             if (entries.size == 1 && controller.packageName != packageName) {
-                entries = MediaItems.queueFrom(entries.first(), app.library.entries.value, app.settings.current)
-                index = 0
+                val picked = entries.first()
+                if (mixtape != null) {
+                    entries = MediaItems.mixtapeQueue(mixtape, app.library.entries.value)
+                    index = entries.indexOfFirst { it.id == picked.id }.coerceAtLeast(0)
+                } else {
+                    entries = MediaItems.queueFrom(picked, app.library.entries.value, app.settings.current)
+                    index = 0
+                }
             }
             val start = entries.getOrNull(index)
             val position = if (startPositionMs == C.TIME_UNSET && start != null) {
@@ -246,7 +257,8 @@ class PlaybackService : MediaLibraryService() {
             } else {
                 startPositionMs
             }
-            return Futures.immediateFuture(MediaSession.MediaItemsWithStartPosition(entries.map { MediaItems.from(it) }, index, position))
+            val items = entries.map { MediaItems.from(it, mixtapeId = mixtape?.id) }
+            return Futures.immediateFuture(MediaSession.MediaItemsWithStartPosition(items, index, position))
         }
 
         // The car's play button after the app was closed: carry on with the last download.
@@ -264,7 +276,7 @@ class PlaybackService : MediaLibraryService() {
         }
 
         private fun resolve(items: List<MediaItem>): List<Entry> =
-            items.mapNotNull { item -> app.library[item.mediaId]?.takeIf { it.isDone } }
+            items.mapNotNull { item -> app.library[MediaItems.entryId(item.mediaId)]?.takeIf { it.isDone } }
     }
 
     private companion object {

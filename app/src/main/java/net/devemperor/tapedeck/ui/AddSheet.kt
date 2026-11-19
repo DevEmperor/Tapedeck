@@ -27,12 +27,15 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.PlaylistPlay
+import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.ArrowDropDown
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.ContentPaste
 import androidx.compose.material.icons.rounded.Download
@@ -56,11 +59,17 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -77,6 +86,7 @@ import net.devemperor.tapedeck.data.AudioFormat
 import net.devemperor.tapedeck.data.AudioQuality
 import net.devemperor.tapedeck.data.DownloadOptions
 import net.devemperor.tapedeck.data.MediaKind
+import net.devemperor.tapedeck.data.Mixtape
 import net.devemperor.tapedeck.data.VideoFormat
 import net.devemperor.tapedeck.engine.MediaFormat
 
@@ -94,6 +104,8 @@ fun AddSheet(
     onPickFormat: (MediaFormat?, MediaFormat?) -> Unit,
     onClearCustom: () -> Unit,
     onRetryDetails: () -> Unit,
+    mixtapes: List<Mixtape>,
+    onMixtape: (String?, String?) -> Unit,
     onConfirm: () -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -112,7 +124,7 @@ fun AddSheet(
             if (formats) {
                 FormatsPage(state, onBack = onCloseFormats, onPick = onPickFormat, onRetry = onRetryDetails)
             } else {
-                OptionsPage(state, onUrl, onOptions, onWholePlaylist, onOpenFormats, onClearCustom, onConfirm)
+                OptionsPage(state, onUrl, onOptions, onWholePlaylist, onOpenFormats, onClearCustom, mixtapes, onMixtape, onConfirm)
             }
         }
     }
@@ -126,6 +138,8 @@ private fun OptionsPage(
     onWholePlaylist: (Boolean) -> Unit,
     onOpenFormats: () -> Unit,
     onClearCustom: () -> Unit,
+    mixtapes: List<Mixtape>,
+    onMixtape: (String?, String?) -> Unit,
     onConfirm: () -> Unit,
 ) {
     run {
@@ -264,7 +278,9 @@ private fun OptionsPage(
                 }
             }
 
-            Spacer(Modifier.height(22.dp))
+            MixtapeChoice(state, mixtapes, onMixtape)
+
+            Spacer(Modifier.height(18.dp))
             Button(
                 onClick = onConfirm,
                 enabled = state.canStart,
@@ -349,6 +365,68 @@ private fun PlaylistRow(state: AddSheetState, onWholePlaylist: (Boolean) -> Unit
                 CircularProgressIndicator(Modifier.size(20.dp).padding(end = 4.dp), strokeWidth = 2.dp)
             }
             Switch(checked = state.wholePlaylist, onCheckedChange = onWholePlaylist)
+        }
+    }
+}
+
+/** "On mixtape: [None ▾]" — straight onto a mixtape; a whole playlist can become a new one of its own name. */
+@Composable
+private fun MixtapeChoice(state: AddSheetState, mixtapes: List<Mixtape>, onMixtape: (String?, String?) -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    var naming by remember { mutableStateOf(false) }
+    val chosen = state.mixtapeId?.let { id -> mixtapes.firstOrNull { it.id == id } }
+    val label = when {
+        state.newMixtapeName != null -> stringResource(R.string.mixtape_new_named, state.newMixtapeName)
+        chosen != null -> chosen.name
+        else -> stringResource(R.string.mixtape_none)
+    }
+    val active = state.newMixtapeName != null || chosen != null
+    Row(Modifier.fillMaxWidth().padding(top = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(stringResource(R.string.mixtape_on), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
+        Box {
+            Surface(
+                onClick = { open = true },
+                shape = CircleShape,
+                color = if (active) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerHigh,
+            ) {
+                Row(Modifier.padding(start = 14.dp, end = 8.dp, top = 8.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    if (chosen != null) {
+                        Box(Modifier.size(10.dp).clip(CircleShape).background(mixtapeColor(chosen.color)))
+                        Spacer(Modifier.width(8.dp))
+                    }
+                    Text(label, style = MaterialTheme.typography.labelLarge, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 200.dp))
+                    Icon(Icons.Rounded.ArrowDropDown, null)
+                }
+            }
+            DropdownMenu(open, onDismissRequest = { open = false }) {
+                DropdownMenuItem(text = { Text(stringResource(R.string.mixtape_none)) }, onClick = { open = false; onMixtape(null, null) })
+                mixtapes.forEach { tape ->
+                    DropdownMenuItem(
+                        text = { Text(tape.name) },
+                        leadingIcon = { Box(Modifier.size(10.dp).clip(CircleShape).background(mixtapeColor(tape.color))) },
+                        onClick = { open = false; onMixtape(tape.id, null) },
+                    )
+                }
+                val playlistTitle = state.playlist?.title
+                if (state.wholePlaylist && playlistTitle != null) {
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.mixtape_new_named, playlistTitle)) },
+                        leadingIcon = { Icon(Icons.Rounded.Add, null) },
+                        onClick = { open = false; onMixtape(null, playlistTitle) },
+                    )
+                }
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.mixtape_new_dots)) },
+                    leadingIcon = { Icon(Icons.Rounded.Add, null) },
+                    onClick = { open = false; naming = true },
+                )
+            }
+        }
+    }
+    if (naming) {
+        NameDialog(R.string.mixtape_new, state.playlist?.title.orEmpty(), R.string.ok, onDismiss = { naming = false }) { name ->
+            naming = false
+            onMixtape(null, name.trim())
         }
     }
 }

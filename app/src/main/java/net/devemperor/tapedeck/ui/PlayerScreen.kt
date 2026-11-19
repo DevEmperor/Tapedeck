@@ -21,6 +21,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
@@ -46,12 +48,13 @@ import androidx.compose.material.icons.rounded.GraphicEq
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.Repeat
 import androidx.compose.material.icons.rounded.Replay10
+import androidx.compose.material.icons.rounded.Shuffle
 import androidx.compose.material.icons.rounded.SkipNext
 import androidx.compose.material.icons.rounded.SkipPrevious
 import androidx.compose.material.icons.rounded.Speed
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
@@ -59,10 +62,15 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -102,6 +110,7 @@ import coil3.compose.AsyncImage
 import kotlinx.coroutines.delay
 import net.devemperor.tapedeck.Format
 import net.devemperor.tapedeck.R
+import net.devemperor.tapedeck.data.AppSettings
 import net.devemperor.tapedeck.data.Chapter
 import net.devemperor.tapedeck.data.Entry
 import net.devemperor.tapedeck.player.PlayerUiState
@@ -133,6 +142,8 @@ fun PlayerScreen(vm: MainViewModel, startFullscreen: Boolean = false, onClose: (
     val duration = state.durationMs.takeIf { it > 0 } ?: entry.durationMs
     var fullscreen by rememberSaveable { mutableStateOf(startFullscreen) }
     var chaptersOpen by remember { mutableStateOf(false) }
+    var playbackOpen by remember { mutableStateOf(false) }
+    val mixtapes by vm.mixtapes.collectAsStateWithLifecycle()
 
     // Upright videos (Instagram, Shorts) are shown upright: big in the player, and full screen stays upright.
     val aspect = videoAspect(entry, state)
@@ -212,16 +223,32 @@ fun PlayerScreen(vm: MainViewModel, startFullscreen: Boolean = false, onClose: (
             Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().padding(horizontal = 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = onClose) { Icon(Icons.Rounded.KeyboardArrowDown, stringResource(R.string.close), Modifier.size(30.dp)) }
-                Text(
-                    stringResource(R.string.now_playing),
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.weight(1f),
-                    textAlign = TextAlign.Center,
-                )
-                Spacer(Modifier.size(48.dp))
+            // Close on the left, what is playing (and from which mixtape) in the middle, and on the right the
+            // chapters and the playback menu (speed, skip silence, repeat, shuffle) — instead of a row of
+            // chips under the controls.
+            Box(Modifier.fillMaxWidth().padding(top = 8.dp)) {
+                IconButton(onClick = onClose, modifier = Modifier.align(Alignment.CenterStart)) {
+                    Icon(Icons.Rounded.KeyboardArrowDown, stringResource(R.string.close), Modifier.size(30.dp))
+                }
+                Column(Modifier.align(Alignment.Center).padding(horizontal = 104.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(stringResource(R.string.now_playing), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    val tape = state.mixtapeId?.let { id -> mixtapes.firstOrNull { it.id == id } }
+                    if (tape != null) {
+                        Text(
+                            stringResource(R.string.from_mixtape, tape.name),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = mixtapeColor(tape.color),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+                Row(Modifier.align(Alignment.CenterEnd), verticalAlignment = Alignment.CenterVertically) {
+                    if (entry.chapters.isNotEmpty()) {
+                        IconButton(onClick = { chaptersOpen = true }) { Icon(Icons.AutoMirrored.Rounded.List, stringResource(R.string.chapters)) }
+                    }
+                    PlaybackButton(settings, state) { playbackOpen = true }
+                }
             }
 
             if (entry.isVideo) {
@@ -293,30 +320,11 @@ fun PlayerScreen(vm: MainViewModel, startFullscreen: Boolean = false, onClose: (
                     Icon(Icons.Rounded.SkipNext, stringResource(R.string.next), Modifier.size(30.dp))
                 }
             }
-            Spacer(Modifier.height(18.dp))
-
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally)) {
-                Box {
-                    var open by remember { mutableStateOf(false) }
-                    PlayerChip(Icons.Rounded.Speed, formatSpeed(settings.playbackSpeed), selected = settings.playbackSpeed != 1f) { open = true }
-                    DropdownMenu(open, onDismissRequest = { open = false }) {
-                        SPEEDS.forEach { speed ->
-                            DropdownMenuItem(text = { Text(formatSpeed(speed)) }, onClick = {
-                                vm.updateSettings { it.copy(playbackSpeed = speed) }
-                                open = false
-                            })
-                        }
-                    }
-                }
-                PlayerChip(Icons.Rounded.GraphicEq, stringResource(R.string.skip_silence_short), selected = settings.skipSilence) {
-                    vm.updateSettings { it.copy(skipSilence = !it.skipSilence) }
-                }
-                if (entry.chapters.isNotEmpty()) {
-                    PlayerChip(Icons.AutoMirrored.Rounded.List, stringResource(R.string.chapters), selected = false) { chaptersOpen = true }
-                }
-            }
-            Spacer(Modifier.height(24.dp))
+            Spacer(Modifier.height(36.dp))
         }
+    }
+    if (playbackOpen) {
+        PlaybackSheet(vm, settings, state, onDismiss = { playbackOpen = false })
     }
 
     if (chaptersOpen) {
@@ -362,20 +370,113 @@ private fun SeekBar(
     }
 }
 
+/**
+ * The playback menu's button in the top bar: a plain icon while everything is as usual, a tinted pill
+ * with the speed ("1.5×") as soon as something differs — so the state stays visible without a chip row.
+ */
 @Composable
-private fun PlayerChip(icon: ImageVector, label: String, selected: Boolean, onClick: () -> Unit) {
-    FilterChip(
-        selected = selected,
+private fun PlaybackButton(settings: AppSettings, state: PlayerUiState, onClick: () -> Unit) {
+    val changed = settings.playbackSpeed != 1f || settings.skipSilence || state.shuffle || state.repeatMode != Player.REPEAT_MODE_OFF
+    val container = if (changed) MaterialTheme.colorScheme.primaryContainer else Color.Transparent
+    val content = if (changed) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface
+    Surface(
         onClick = onClick,
-        label = { Text(label) },
-        leadingIcon = { Icon(icon, null, Modifier.size(18.dp)) },
         shape = CircleShape,
-        colors = FilterChipDefaults.filterChipColors(
-            selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-            selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer,
-            selectedLeadingIconColor = MaterialTheme.colorScheme.onPrimaryContainer,
-        ),
-    )
+        color = container,
+        modifier = Modifier.padding(end = 4.dp).height(40.dp),
+    ) {
+        Row(Modifier.padding(horizontal = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Rounded.Tune, stringResource(R.string.playback_title), tint = content, modifier = Modifier.size(22.dp))
+            if (settings.playbackSpeed != 1f) {
+                Spacer(Modifier.width(6.dp))
+                Text(formatSpeed(settings.playbackSpeed), style = MaterialTheme.typography.labelLarge, color = content)
+            }
+        }
+    }
+}
+
+/** Speed, skip silence, repeat and shuffle in one sheet. */
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@Composable
+private fun PlaybackSheet(vm: MainViewModel, settings: AppSettings, state: PlayerUiState, onDismiss: () -> Unit) {
+    // Fully open at once: half-open, its last rows sat under the navigation bar.
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState, containerColor = MaterialTheme.colorScheme.surfaceContainerLow) {
+        Column(Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 24.dp).padding(bottom = 20.dp)) {
+            Text(stringResource(R.string.playback_title), style = MaterialTheme.typography.titleLarge)
+            Spacer(Modifier.height(18.dp))
+
+            SheetLabel(Icons.Rounded.Speed, R.string.playback_speed)
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                SPEEDS.forEach { speed ->
+                    FilterChip(
+                        selected = settings.playbackSpeed == speed,
+                        onClick = { vm.updateSettings { it.copy(playbackSpeed = speed) } },
+                        label = { Text(formatSpeed(speed)) },
+                        shape = CircleShape,
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                            selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                        ),
+                    )
+                }
+            }
+            Spacer(Modifier.height(16.dp))
+
+            SheetLabel(Icons.Rounded.Repeat, R.string.playback_repeat)
+            SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+                val modes = listOf(
+                    Player.REPEAT_MODE_OFF to R.string.repeat_off,
+                    Player.REPEAT_MODE_ALL to R.string.repeat_all,
+                    Player.REPEAT_MODE_ONE to R.string.repeat_one,
+                )
+                modes.forEachIndexed { index, (mode, label) ->
+                    SegmentedButton(
+                        selected = state.repeatMode == mode,
+                        onClick = { vm.player.setRepeatMode(mode) },
+                        shape = SegmentedButtonDefaults.itemShape(index, modes.size),
+                        colors = SegmentedButtonDefaults.colors(
+                            activeContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                            activeContentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                        ),
+                        icon = {},
+                    ) { Text(stringResource(label)) }
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+
+            SheetSwitch(Icons.Rounded.Shuffle, R.string.playback_shuffle, R.string.playback_shuffle_sub, state.shuffle) { vm.player.setShuffle(it) }
+            SheetSwitch(Icons.Rounded.GraphicEq, R.string.skip_silence, R.string.skip_silence_sub, settings.skipSilence) { on ->
+                vm.updateSettings { it.copy(skipSilence = on) }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SheetLabel(icon: ImageVector, text: Int) {
+    Row(Modifier.padding(bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+        Icon(icon, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+        Spacer(Modifier.width(8.dp))
+        Text(stringResource(text), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+    }
+}
+
+@Composable
+private fun SheetSwitch(icon: ImageVector, title: Int, sub: Int, checked: Boolean, onChange: (Boolean) -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().clip(MaterialTheme.shapes.medium).clickable { onChange(!checked) }.padding(vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(icon, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(22.dp))
+        Spacer(Modifier.width(14.dp))
+        Column(Modifier.weight(1f)) {
+            Text(stringResource(title), style = MaterialTheme.typography.bodyLarge)
+            Text(stringResource(sub), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        Spacer(Modifier.width(12.dp))
+        Switch(checked = checked, onCheckedChange = onChange)
+    }
 }
 
 @androidx.annotation.OptIn(UnstableApi::class)

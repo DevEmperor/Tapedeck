@@ -44,6 +44,8 @@ fun TapedeckRoot(vm: MainViewModel) {
     var screen by rememberSaveable { mutableStateOf(Screen.LIBRARY) }
     // A double tap on the mini player opens a video straight in full screen.
     var playerFullscreen by rememberSaveable { mutableStateOf(false) }
+    // An open mixtape lies between the library and the player: closing the player returns to it.
+    var openMixtape by rememberSaveable { mutableStateOf<String?>(null) }
     val sheet by vm.sheet.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
     val context = LocalContext.current
@@ -74,7 +76,9 @@ fun TapedeckRoot(vm: MainViewModel) {
         }
     }
 
-    BackHandler(enabled = screen != Screen.LIBRARY) { screen = Screen.LIBRARY }
+    BackHandler(enabled = screen != Screen.LIBRARY || openMixtape != null) {
+        if (screen != Screen.LIBRARY) screen = Screen.LIBRARY else openMixtape = null
+    }
 
     Box(Modifier.fillMaxSize()) {
         LibraryScreen(
@@ -88,7 +92,32 @@ fun TapedeckRoot(vm: MainViewModel) {
                 screen = Screen.PLAYER
             },
             onOpenSettings = { screen = Screen.SETTINGS },
+            onOpenMixtape = { openMixtape = it },
         )
+        // Kept for the slide-out, after openMixtape is already null.
+        var shownMixtape by remember { mutableStateOf(openMixtape) }
+        if (openMixtape != null) shownMixtape = openMixtape
+        AnimatedVisibility(
+            openMixtape != null,
+            enter = slideInHorizontally { it } + fadeIn(),
+            exit = slideOutHorizontally { it } + fadeOut(),
+        ) {
+            shownMixtape?.let { id ->
+                MixtapeScreen(
+                    vm,
+                    id,
+                    onBack = { openMixtape = null },
+                    onOpenPlayer = {
+                        playerFullscreen = false
+                        screen = Screen.PLAYER
+                    },
+                    onOpenFullscreen = {
+                        playerFullscreen = true
+                        screen = Screen.PLAYER
+                    },
+                )
+            }
+        }
         AnimatedVisibility(
             screen == Screen.PLAYER,
             enter = slideInVertically { it } + fadeIn(),
@@ -120,6 +149,8 @@ fun TapedeckRoot(vm: MainViewModel) {
             onPickFormat = vm::pickFormat,
             onClearCustom = vm::clearCustomFormat,
             onRetryDetails = vm::retryDetails,
+            mixtapes = vm.mixtapes.collectAsStateWithLifecycle().value,
+            onMixtape = vm::setSheetMixtape,
             onConfirm = {
                 askForNotifications()
                 vm.confirmSheet()

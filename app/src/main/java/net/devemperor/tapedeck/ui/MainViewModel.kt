@@ -27,6 +27,7 @@ import net.devemperor.tapedeck.data.AppSettings
 import net.devemperor.tapedeck.data.DownloadOptions
 import net.devemperor.tapedeck.data.DownloadState
 import net.devemperor.tapedeck.data.Entry
+import net.devemperor.tapedeck.data.Mixtape
 import net.devemperor.tapedeck.data.ShareAction
 import net.devemperor.tapedeck.data.Storage
 import net.devemperor.tapedeck.download.NewDownload
@@ -60,6 +61,10 @@ data class AddSheetState(
     val detailsError: String? = null,
     /** The sheet shows the list of formats instead of the options. */
     val showFormats: Boolean = false,
+    /** Put the new download(s) on this mixtape … */
+    val mixtapeId: String? = null,
+    /** … or on a new one of this name (a playlist's own title, or one typed in). */
+    val newMixtapeName: String? = null,
 ) {
     val link: String? get() = Links.extractUrl(url)
     val canStart: Boolean
@@ -248,6 +253,35 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun clearCustomFormat() = _sheet.update { it?.copy(options = it.options.asDefaults()) }
 
+    /** The sheet's "On mixtape" choice: none, an existing one, or a new one by name. */
+    fun setSheetMixtape(mixtapeId: String?, newName: String?) = _sheet.update { it?.copy(mixtapeId = mixtapeId, newMixtapeName = newName) }
+
+    // ---- Mixtapes ----
+
+    val mixtapes: StateFlow<List<Mixtape>> = app.library.mixtapes
+
+    fun createMixtape(name: String, entryIds: List<String> = emptyList()): Mixtape = app.library.createMixtape(name, entryIds)
+
+    fun renameMixtape(id: String, name: String) {
+        if (name.isBlank()) return
+        app.library.updateMixtape(id) { it.copy(name = name.trim()) }
+    }
+
+    /** The mixtape goes; its downloads stay in the library. */
+    fun deleteMixtape(id: String) = app.library.deleteMixtape(id)
+
+    fun toggleOnMixtape(mixtapeId: String, entryId: String) {
+        val tape = app.library.mixtape(mixtapeId) ?: return
+        if (entryId in tape.entryIds) app.library.removeFromMixtape(mixtapeId, entryId) else app.library.addToMixtape(mixtapeId, listOf(entryId))
+    }
+
+    fun removeFromMixtape(mixtapeId: String, entryId: String) = app.library.removeFromMixtape(mixtapeId, entryId)
+
+    fun reorderMixtape(mixtapeId: String, entryIds: List<String>) = app.library.reorderMixtape(mixtapeId, entryIds)
+
+    fun playMixtape(tape: Mixtape, start: Entry? = null, shuffle: Boolean = false) =
+        player.playMixtape(tape, entries.value.filter { it.id !in _pendingDeletes.value }, settings.value, start, shuffle)
+
     private fun loadDetails() {
         val sheet = _sheet.value ?: return
         val link = sheet.link ?: return
@@ -307,7 +341,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 ),
             )
         }
-        app.downloads.enqueue(requests)
+        val added = app.downloads.enqueue(requests).map { it.id }
+        // Straight onto a mixtape: the songs of a playlist in their order, while they are still downloading.
+        when {
+            sheet.newMixtapeName != null -> app.library.createMixtape(sheet.newMixtapeName, added)
+            sheet.mixtapeId != null -> app.library.addToMixtape(sheet.mixtapeId, added)
+        }
         closeSheet()
         val count = requests.size
         message { it.resources.getQuantityString(R.plurals.started, count, count) }
@@ -345,7 +384,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun deleteFinished() {
-        val ids = entries.value.filter { it.isDone && it.finished && !it.keep }.map { it.id }.toSet()
+        val onMixtapes = app.library.onMixtapes()
+        val ids = entries.value.filter { it.isDone && it.finished && !it.keep && it.id !in onMixtapes }.map { it.id }.toSet()
         if (ids.isEmpty()) message { it.getString(R.string.nothing_finished) } else delete(ids)
     }
 

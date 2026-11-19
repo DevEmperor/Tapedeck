@@ -34,6 +34,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.OpenInNew
+import androidx.compose.material.icons.automirrored.rounded.PlaylistAdd
 import androidx.compose.material.icons.automirrored.rounded.Sort
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.CheckCircle
@@ -124,8 +125,16 @@ import java.util.concurrent.TimeUnit
 enum class LibraryFilter { ALL, AUDIO, VIDEO, NEW }
 
 @Composable
-fun LibraryScreen(vm: MainViewModel, onOpenPlayer: () -> Unit, onOpenFullscreen: () -> Unit, onOpenSettings: () -> Unit) {
+fun LibraryScreen(
+    vm: MainViewModel,
+    onOpenPlayer: () -> Unit,
+    onOpenFullscreen: () -> Unit,
+    onOpenSettings: () -> Unit,
+    onOpenMixtape: (String) -> Unit,
+) {
     val entries by vm.entries.collectAsStateWithLifecycle()
+    val mixtapes by vm.mixtapes.collectAsStateWithLifecycle()
+    val onMixtapes = remember(mixtapes) { mixtapes.flatMapTo(HashSet()) { it.entryIds } }
     val live by vm.live.collectAsStateWithLifecycle()
     val settings by vm.settings.collectAsStateWithLifecycle()
     val pending by vm.pendingDeletes.collectAsStateWithLifecycle()
@@ -186,6 +195,9 @@ fun LibraryScreen(vm: MainViewModel, onOpenPlayer: () -> Unit, onOpenFullscreen:
                     )
                 }
             }
+            if (mixtapes.isNotEmpty() && query.isBlank()) {
+                item(key = "mixtapes") { MixtapeShelf(vm, visible, playerState, onOpen = onOpenMixtape) }
+            }
             if (done.isNotEmpty()) {
                 item(key = "filters") {
                     FilterRow(filter, onFilter = { filter = it }, counts = mapOf(
@@ -200,7 +212,7 @@ fun LibraryScreen(vm: MainViewModel, onOpenPlayer: () -> Unit, onOpenFullscreen:
                         entry = entry,
                         isCurrent = entry.id == playerState.entryId,
                         isPlaying = entry.id == playerState.entryId && playerState.isPlaying,
-                        deleteAt = AutoDelete.dueAt(entry, settings),
+                        deleteAt = AutoDelete.dueAt(entry, settings, onMixtapes),
                         onPlay = {
                             if (entry.id == playerState.entryId) onOpenPlayer() else {
                                 vm.play(entry)
@@ -670,6 +682,7 @@ private fun EntryCard(
     val context = LocalContext.current
     val uriHandler = LocalUriHandler.current
     var menu by remember { mutableStateOf(false) }
+    var picking by remember { mutableStateOf(false) }
     val background = if (isCurrent) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f) else Color.Transparent
     Box(modifier) {
         Row(
@@ -736,6 +749,7 @@ private fun EntryCard(
                 IconButton(onClick = { menu = true }) { Icon(Icons.Rounded.MoreVert, stringResource(R.string.more)) }
                 DropdownMenu(menu, onDismissRequest = { menu = false }) {
                     MenuItem(Icons.Rounded.PlayArrow, R.string.play_from_start) { menu = false; vm.playFromStart(entry) }
+                    MenuItem(Icons.AutoMirrored.Rounded.PlaylistAdd, R.string.mixtape_add) { menu = false; picking = true }
                     MenuItem(Icons.Rounded.DoneAll, if (entry.finished) R.string.mark_unheard else R.string.mark_heard) { menu = false; vm.toggleFinished(entry) }
                     MenuItem(Icons.Rounded.PushPin, if (entry.keep) R.string.unkeep else R.string.keep) { menu = false; vm.toggleKeep(entry) }
                     MenuItem(Icons.Rounded.Share, R.string.share_file) {
@@ -750,6 +764,7 @@ private fun EntryCard(
             }
         }
     }
+    if (picking) MixtapePickerDialog(vm, entry, onDismiss = { picking = false })
 }
 
 @Composable
@@ -773,7 +788,7 @@ private fun Badge(text: String, color: Color) {
 }
 
 @Composable
-private fun MiniPlayer(entry: Entry, vm: MainViewModel, isPlaying: Boolean, durationMs: Long, onOpen: () -> Unit, onOpenFullscreen: () -> Unit) {
+fun MiniPlayer(entry: Entry, vm: MainViewModel, isPlaying: Boolean, durationMs: Long, onOpen: () -> Unit, onOpenFullscreen: () -> Unit) {
     var position by remember { mutableLongStateOf(vm.player.currentPosition()) }
     LaunchedEffect(isPlaying, entry.id) {
         while (true) {

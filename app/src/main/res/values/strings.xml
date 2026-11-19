@@ -160,7 +160,41 @@
     <string name="fullscreen">Full screen</string>
     <string name="fullscreen_exit">Leave full screen</string>
     <string name="chapters">Chapters</string>
-    <string name="skip_silence_short">Skip silence</string>
+    <string name="playback_title">Playback</string>
+    <string name="playback_speed">Speed</string>
+    <string name="playback_repeat">Repeat</string>
+    <string name="repeat_off">Off</string>
+    <string name="repeat_all">All</string>
+    <string name="repeat_one">This one</string>
+    <string name="playback_shuffle">Shuffle</string>
+    <string name="playback_shuffle_sub">Plays the queue in random order</string>
+    <string name="from_mixtape">Mixtape “%s”</string>
+    <string name="done">Done</string>
+
+    <!-- Mixtapes -->
+    <string name="mixtapes">Mixtapes</string>
+    <string name="mixtape_new">New mixtape</string>
+    <string name="mixtape_new_dots">New mixtape…</string>
+    <string name="mixtape_new_named">New mixtape “%s”</string>
+    <string name="mixtape_create">Create</string>
+    <string name="mixtape_name">Name</string>
+    <string name="mixtape_rename">Rename</string>
+    <string name="mixtape_delete">Delete mixtape</string>
+    <string name="mixtape_delete_title">Delete “%s”?</string>
+    <string name="mixtape_delete_body">Only the mixtape goes; its downloads stay in your library.</string>
+    <string name="mixtape_shuffle">Shuffle</string>
+    <string name="mixtape_empty">Still empty. Put downloads on this mixtape from their menu (⋮ → On mixtape…), or pick it when you download.</string>
+    <string name="mixtape_not_ready">Not downloaded yet</string>
+    <string name="mixtape_move">Move</string>
+    <string name="mixtape_remove">Take off this mixtape</string>
+    <string name="mixtape_pick_title">On mixtape</string>
+    <string name="mixtape_add">On mixtape…</string>
+    <string name="mixtape_on">On mixtape</string>
+    <string name="mixtape_none">None</string>
+    <plurals name="mixtape_titles">
+        <item quantity="one">%d song</item>
+        <item quantity="other">%d songs</item>
+    </plurals>
     <string name="close">Close</string>
     <string name="back">Back</string>
 

@@ -85,5 +85,20 @@ data class Entry(
     val isNew get() = lastPlayedAt == null && !finished
 }
 
+/**
+ * A collection of downloads in an order of its own, played one after the other — a playlist, put as
+ * a mixtape since this is Tapedeck. A download can be on several mixtapes; deleting a mixtape keeps them.
+ */
 @Serializable
-data class LibraryFile(val version: Int = 1, val entries: List<Entry> = emptyList())
+data class Mixtape(
+    val id: String,
+    val name: String,
+    /** Entry ids in play order. */
+    val entryIds: List<String> = emptyList(),
+    /** Index into the cassette colours, so every mixtape keeps its look. */
+    val color: Int = 0,
+    val createdAt: Long,
+)
+
+@Serializable
+data class LibraryFile(val version: Int = 1, val entries: List<Entry> = emptyList(), val mixtapes: List<Mixtape> = emptyList())

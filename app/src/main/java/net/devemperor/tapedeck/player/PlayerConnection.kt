@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import net.devemperor.tapedeck.data.AppSettings
 import net.devemperor.tapedeck.data.Entry
+import net.devemperor.tapedeck.data.Mixtape
 
 data class PlayerUiState(
     val entryId: String? = null,
@@ -24,6 +25,10 @@ data class PlayerUiState(
     val speed: Float = 1f,
     /** Width ÷ height of the picture once the player knows it; below 1 for an upright video (Instagram, Shorts). */
     val videoAspect: Float? = null,
+    /** The mixtape the current item is played from, if any. */
+    val mixtapeId: String? = null,
+    val shuffle: Boolean = false,
+    @Player.RepeatMode val repeatMode: Int = Player.REPEAT_MODE_OFF,
 )
 
 /** The app's connection to [PlaybackService]; lives while the activity is started. */
@@ -73,6 +78,8 @@ class PlayerConnection(private val context: Context) {
         }
         val queue = MediaItems.queueFrom(entry, library, settings)
         val start = MediaItems.resumePosition(entry, settings.resumeRewindSec)
+        // The library plays in its own order; a mixtape's shuffle does not carry over.
+        controller.shuffleModeEnabled = false
         controller.setMediaItems(queue.map { MediaItems.from(it) }, 0, start)
         controller.prepare()
         controller.play()
@@ -81,9 +88,40 @@ class PlayerConnection(private val context: Context) {
     fun playFromStart(entry: Entry, library: List<Entry>, settings: AppSettings) {
         val controller = _controller.value ?: return
         val queue = MediaItems.queueFrom(entry, library, settings)
+        controller.shuffleModeEnabled = false
         controller.setMediaItems(queue.map { MediaItems.from(it) }, 0, 0)
         controller.prepare()
         controller.play()
+    }
+
+    /**
+     * A mixtape from [start] on (or from its first song), always one after the other — that is what a
+     * mixtape is for, whatever "Keep playing" says. [shuffle] plays it in random order instead.
+     */
+    fun playMixtape(tape: Mixtape, library: List<Entry>, settings: AppSettings, start: Entry? = null, shuffle: Boolean = false) {
+        val controller = _controller.value ?: return
+        val current = controller.currentMediaItem
+        if (start != null && !shuffle && current?.mediaId == start.id && current.let(MediaItems::mixtapeOf) == tape.id) {
+            if (!controller.isPlaying) controller.play()
+            return
+        }
+        val queue = MediaItems.mixtapeQueue(tape, library)
+        if (queue.isEmpty()) return
+        val index = if (shuffle) queue.indices.random() else start?.let { s -> queue.indexOfFirst { it.id == s.id } }?.coerceAtLeast(0) ?: 0
+        // A song picked by hand carries on where it stopped; "play the mixtape" starts each song at its beginning.
+        val position = if (start != null && !shuffle) MediaItems.resumePosition(queue[index], settings.resumeRewindSec) else 0
+        controller.shuffleModeEnabled = shuffle
+        controller.setMediaItems(queue.map { MediaItems.from(it, mixtapeId = tape.id) }, index, position)
+        controller.prepare()
+        controller.play()
+    }
+
+    fun setShuffle(on: Boolean) {
+        _controller.value?.shuffleModeEnabled = on
+    }
+
+    fun setRepeatMode(@Player.RepeatMode mode: Int) {
+        _controller.value?.repeatMode = mode
     }
 
     fun togglePlay() {
@@ -132,6 +170,9 @@ class PlayerConnection(private val context: Context) {
             speed = controller.playbackParameters.speed,
             videoAspect = controller.videoSize.takeIf { it.width > 0 && it.height > 0 }
                 ?.let { it.width * it.pixelWidthHeightRatio / it.height },
+            mixtapeId = controller.currentMediaItem?.let(MediaItems::mixtapeOf),
+            shuffle = controller.shuffleModeEnabled,
+            repeatMode = controller.repeatMode,
         )
     }
 }
