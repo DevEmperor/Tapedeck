@@ -23,7 +23,9 @@ enum class LibrarySort { NEWEST, OLDEST, TITLE, LAST_PLAYED }
 data class AppSettings(
     val defaults: DownloadOptions = DownloadOptions(),
     val shareAction: ShareAction = ShareAction.ASK,
-    val wifiOnly: Boolean = false,
+    // On by default: a long video over mobile data can eat a monthly plan in one go.
+    val wifiOnly: Boolean = true,
+    /** 1–5, chosen with the wheel. */
     val parallelDownloads: Int = 2,
     val sponsorBlock: Boolean = false,
     val autoDeleteEnabled: Boolean = false,
@@ -51,6 +53,8 @@ data class AppSettings(
     companion object {
         const val AUTO_DELETE_MIN_DAYS = 1
         const val AUTO_DELETE_MAX_DAYS = 90
+        const val MAX_PARALLEL_DOWNLOADS = 5
+        val REWIND_OPTIONS_SEC = listOf(0, 3, 5, 10, 30)
     }
 }
 

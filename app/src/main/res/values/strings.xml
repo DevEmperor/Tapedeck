@@ -43,6 +43,7 @@
     <string name="progress_eta">%s left</string>
     <string name="format_kbit">%d kbit/s</string>
     <string name="cancel">Cancel</string>
+    <string name="ok">OK</string>
     <string name="retry">Try again</string>
     <string name="delete">Delete</string>
     <string name="undo">Undo</string>
@@ -179,6 +180,7 @@
     <string name="ytdlp_version">Version</string>
     <string name="ytdlp_checked">checked %s</string>
     <string name="ytdlp_never_checked">not checked yet</string>
+    <string name="just_now">just now</string>
     <string name="ytdlp_last_error">last check failed</string>
     <string name="setting_channel">Update channel</string>
     <string name="channel_nightly">Nightly</string>

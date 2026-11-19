@@ -19,10 +19,13 @@ object Format {
         return if (h > 0) "%d:%02d:%02d".format(h, m, s) else "%d:%02d".format(m, s)
     }
 
-    /** "vor 11 Min." / "11 min. ago", lower-case so it reads inside a sentence. */
-    fun relative(time: Long): String =
-        DateUtils.getRelativeTimeSpanString(time, System.currentTimeMillis(), DateUtils.MINUTE_IN_MILLIS, DateUtils.FORMAT_ABBREV_RELATIVE)
+    /** "vor 11 Min." / "11 min. ago", lower-case so it reads inside a sentence; "gerade eben" under a minute. */
+    fun relative(context: Context, time: Long): String {
+        val now = System.currentTimeMillis()
+        if (now - time < DateUtils.MINUTE_IN_MILLIS) return context.getString(R.string.just_now)
+        return DateUtils.getRelativeTimeSpanString(time, now, DateUtils.MINUTE_IN_MILLIS, DateUtils.FORMAT_ABBREV_RELATIVE)
             .toString().replaceFirstChar { it.lowercase() }
+    }
 
     fun progress(context: Context, progress: LiveProgress?): String = when (progress?.phase) {
         null, Phase.STARTING -> context.getString(R.string.progress_starting)

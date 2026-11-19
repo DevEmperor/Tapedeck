@@ -13,8 +13,8 @@ Share a video from the YouTube app → Tapedeck → *Download*. That's it.
 - Audio as **M4A** (YouTube's own AAC, no re-encoding), **MP3** (for car stereos that play USB sticks) or the original stream; *data saver* quality at ~64 kbit/s for talks and podcasts
 - Video in 360p–1080p, preferring H.264 so every phone plays it smoothly
 - Whole **playlists** in one go
-- A live progress bar with speed and time left, a queue with 1–3 parallel downloads, and a notification
-- **Wi-Fi only** mode: downloads wait for Wi-Fi and continue by themselves, picking up partial files
+- A live progress bar with speed and time left, a queue with 1–5 parallel downloads, and a notification
+- **Wi-Fi only** (on by default): downloads wait for Wi-Fi and continue by themselves, picking up partial files
 - Optional **SponsorBlock**: cuts sponsor segments, self-promotion and "subscribe" reminders out of downloads
 - Readable error messages (unavailable, private, age-restricted, bot check, no space, …)
 

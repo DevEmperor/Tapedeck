@@ -15,23 +15,18 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.OpenInNew
 import androidx.compose.material.icons.rounded.ArrowDropDown
-import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -42,25 +37,20 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import kotlinx.coroutines.flow.first
 import net.devemperor.tapedeck.BuildConfig
 import net.devemperor.tapedeck.Format
 import net.devemperor.tapedeck.R
@@ -123,9 +113,12 @@ fun SettingsScreen(vm: MainViewModel, onBack: () -> Unit) {
                         listOf(360, 480, 720, 1080).map { it to "${it}p" }, defaults.videoHeight,
                     ) { value -> vm.updateSettings { it.copy(defaults = it.defaults.copy(videoHeight = value)) } }
                     SwitchRow(R.string.setting_wifi_only, R.string.setting_wifi_only_sub, settings.wifiOnly) { on -> vm.updateSettings { it.copy(wifiOnly = on) } }
-                    ChoiceRowText(
-                        R.string.setting_parallel, settings.parallelDownloads.toString(),
-                        listOf(1, 2, 3).map { it to it.toString() }, settings.parallelDownloads,
+                    WheelRow(
+                        title = R.string.setting_parallel,
+                        sub = null,
+                        current = settings.parallelDownloads.coerceIn(1, AppSettings.MAX_PARALLEL_DOWNLOADS),
+                        items = (1..AppSettings.MAX_PARALLEL_DOWNLOADS).toList(),
+                        label = { it.toString() },
                     ) { value -> vm.updateSettings { it.copy(parallelDownloads = value) } }
                     SwitchRow(R.string.setting_sponsorblock, R.string.setting_sponsorblock_sub, settings.sponsorBlock, last = true) { on ->
                         vm.updateSettings { it.copy(sponsorBlock = on) }
@@ -138,9 +131,12 @@ fun SettingsScreen(vm: MainViewModel, onBack: () -> Unit) {
                     SwitchRow(R.string.setting_announcements, R.string.setting_announcements_sub, settings.pauseForAnnouncements) { on ->
                         vm.updateSettings { it.copy(pauseForAnnouncements = on) }
                     }
-                    ChoiceRowText(
-                        R.string.setting_rewind, stringResource(R.string.seconds_short, settings.resumeRewindSec),
-                        listOf(0, 3, 5, 10, 30).map { it to context.getString(R.string.seconds_short, it) }, settings.resumeRewindSec,
+                    WheelRow(
+                        title = R.string.setting_rewind,
+                        sub = null,
+                        current = settings.resumeRewindSec,
+                        items = AppSettings.REWIND_OPTIONS_SEC,
+                        label = { stringResource(R.string.seconds_short, it) },
                     ) { value -> vm.updateSettings { it.copy(resumeRewindSec = value) } }
                     SwitchRow(R.string.skip_silence, R.string.skip_silence_sub, settings.skipSilence, last = true) { on -> vm.updateSettings { it.copy(skipSilence = on) } }
                 }
@@ -155,9 +151,12 @@ fun SettingsScreen(vm: MainViewModel, onBack: () -> Unit) {
                     SwitchRow(R.string.setting_auto_delete, R.string.setting_auto_delete_sub, settings.autoDeleteEnabled) { on ->
                         vm.updateSettings { it.copy(autoDeleteEnabled = on) }
                     }
-                    DaysSpinnerRow(
-                        days = settings.autoDeleteAfterDays,
+                    WheelRow(
+                        title = R.string.setting_delete_after,
                         sub = stringResource(if (settings.autoDeleteOnlyFinished) R.string.delete_after_from_finished else R.string.delete_after_from_download),
+                        current = settings.autoDeleteAfterDays,
+                        items = (AppSettings.AUTO_DELETE_MIN_DAYS..AppSettings.AUTO_DELETE_MAX_DAYS).toList(),
+                        label = { pluralStringResource(R.plurals.days_after, it, it) },
                         enabled = settings.autoDeleteEnabled,
                     ) { value -> vm.updateSettings { it.copy(autoDeleteDays = value) } }
                     SwitchRow(
@@ -170,7 +169,7 @@ fun SettingsScreen(vm: MainViewModel, onBack: () -> Unit) {
             item {
                 Group(R.string.group_ytdlp) {
                     val channel = stringResource(if (settings.updateChannel == UpdateChannel.NIGHTLY) R.string.channel_nightly else R.string.channel_stable)
-                    val checked = if (meta.lastCheckAt > 0) stringResource(R.string.ytdlp_checked, Format.relative(meta.lastCheckAt)) else stringResource(R.string.ytdlp_never_checked)
+                    val checked = if (meta.lastCheckAt > 0) stringResource(R.string.ytdlp_checked, Format.relative(context, meta.lastCheckAt)) else stringResource(R.string.ytdlp_never_checked)
                     InfoRow(stringResource(R.string.ytdlp_version), listOfNotNull(version ?: "…", checked, meta.lastError?.let { stringResource(R.string.ytdlp_last_error) }).joinToString(" · "))
                     ChoiceRow(
                         R.string.setting_channel, settings.updateChannel,
@@ -298,57 +297,45 @@ private fun <T> ChoiceRowText(title: Int, currentLabel: String, options: List<Pa
     }
 }
 
-/** "Delete after [7 days ▾]": a spinner over 1–90 days that opens scrolled to the current value. */
+/** A setting whose value sits in a chip on the right ("[7 days ▾]") and is chosen on a [WheelPicker]. */
 @Composable
-private fun DaysSpinnerRow(days: Int, sub: String, enabled: Boolean, onPick: (Int) -> Unit) {
+private fun <T> WheelRow(
+    title: Int,
+    sub: String?,
+    current: T,
+    items: List<T>,
+    label: @Composable (T) -> String,
+    enabled: Boolean = true,
+    last: Boolean = false,
+    onPick: (T) -> Unit,
+) {
     var open by remember { mutableStateOf(false) }
-    RowBase(onClick = { open = true }, last = false, enabled = enabled) {
-        TitleAndSub(stringResource(R.string.setting_delete_after), sub, enabled, Modifier.weight(1f))
+    RowBase(onClick = { open = true }, last = last, enabled = enabled) {
+        TitleAndSub(stringResource(title), sub, enabled, Modifier.weight(1f))
         Spacer(Modifier.width(12.dp))
-        Box {
-            val container = if (enabled) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerHighest
-            val content = if (enabled) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
-            Row(
-                Modifier.clip(MaterialTheme.shapes.small).background(container)
-                    .clickable(enabled = enabled) { open = true }
-                    .padding(start = 14.dp, end = 6.dp, top = 8.dp, bottom = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(pluralStringResource(R.plurals.days_after, days, days), style = MaterialTheme.typography.labelLarge, color = content)
-                Icon(Icons.Rounded.ArrowDropDown, null, tint = content)
-            }
-            val scroll = rememberScrollState()
-            val itemPx = with(LocalDensity.current) { 48.dp.roundToPx() }
-            LaunchedEffect(open) {
-                if (!open) return@LaunchedEffect
-                // The menu is measured a frame after it opens; scroll once it can, with two values above the current one.
-                snapshotFlow { scroll.maxValue }.first { it in 1..<Int.MAX_VALUE }
-                scroll.scrollTo((days - 3).coerceAtLeast(0) * itemPx)
-            }
-            DropdownMenu(
-                expanded = open,
-                onDismissRequest = { open = false },
-                scrollState = scroll,
-                modifier = Modifier.heightIn(max = 336.dp),
-            ) {
-                (AppSettings.AUTO_DELETE_MIN_DAYS..AppSettings.AUTO_DELETE_MAX_DAYS).forEach { value ->
-                    val selected = value == days
-                    DropdownMenuItem(
-                        text = {
-                            Text(
-                                pluralStringResource(R.plurals.days_after, value, value),
-                                color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-                                fontWeight = if (selected) FontWeight.SemiBold else null,
-                            )
-                        },
-                        trailingIcon = { if (selected) Icon(Icons.Rounded.Check, null, tint = MaterialTheme.colorScheme.primary) },
-                        onClick = {
-                            onPick(value)
-                            open = false
-                        },
-                    )
-                }
-            }
+        val container = if (enabled) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerHighest
+        val content = if (enabled) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+        Row(
+            Modifier.clip(MaterialTheme.shapes.small).background(container)
+                .clickable(enabled = enabled) { open = true }
+                .padding(start = 14.dp, end = 6.dp, top = 8.dp, bottom = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(label(current), style = MaterialTheme.typography.labelLarge, color = content)
+            Icon(Icons.Rounded.ArrowDropDown, null, tint = content)
         }
+    }
+    if (open) {
+        WheelPickerDialog(
+            title = stringResource(title),
+            items = items,
+            current = current,
+            label = label,
+            onConfirm = { value ->
+                onPick(value)
+                open = false
+            },
+            onDismiss = { open = false },
+        )
     }
 }

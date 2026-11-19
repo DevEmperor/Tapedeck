@@ -1,19 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- A cassette: body with the label window, two reels joined by the tape, and the head opening. -->
+<!-- The in-app line cassette (24-unit path), scaled 2.6× around the centre: body, two reels joined by
+     the tape, and the head opening, drawn as coral lines on the dark background. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <path
-        android:fillColor="#FFFFFFFF"
-        android:fillType="evenOdd"
-        android:pathData="M31,33H77A7,7 0,0 1,84 40V68A7,7 0,0 1,77 75H31A7,7 0,0 1,24 68V40A7,7 0,0 1,31 33Z M38,41H70A5,5 0,0 1,75 46V56A5,5 0,0 1,70 61H38A5,5 0,0 1,33 56V46A5,5 0,0 1,38 41Z M38,72L41,66H67L70,72Z" />
-    <path
-        android:fillColor="#FFFFFFFF"
-        android:fillType="evenOdd"
-        android:pathData="M44,45A6,6 0,1 0,44 57A6,6 0,1 0,44 45Z M44,48.5A2.5,2.5 0,1 1,44 53.5A2.5,2.5 0,1 1,44 48.5Z M64,45A6,6 0,1 0,64 57A6,6 0,1 0,64 45Z M64,48.5A2.5,2.5 0,1 1,64 53.5A2.5,2.5 0,1 1,64 48.5Z" />
-    <path
-        android:fillColor="#FFFFFFFF"
-        android:pathData="M44,55.6H64V57H44Z" />
+    <group
+        android:scaleX="2.6"
+        android:scaleY="2.6"
+        android:translateX="22.8"
+        android:translateY="22.8">
+        <path
+            android:pathData="M4.5,5H19.5A2,2 0,0 1,21.5 7V17A2,2 0,0 1,19.5 19H4.5A2,2 0,0 1,2.5 17V7A2,2 0,0 1,4.5 5Z M8,8.5A2,2 0,1 1,8 12.5A2,2 0,1 1,8 8.5Z M16,8.5A2,2 0,1 1,16 12.5A2,2 0,1 1,16 8.5Z M8,12.5L16,12.5 M6.5,19L8,15.8L16,15.8L17.5,19"
+            android:strokeWidth="1.8"
+            android:strokeColor="#FFFF6B57"
+            android:strokeLineCap="round"
+            android:strokeLineJoin="round" />
+    </group>
 </vector>

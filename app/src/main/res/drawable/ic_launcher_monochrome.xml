@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Same lines as the foreground; the launcher tints them for themed icons. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <group
+        android:scaleX="2.6"
+        android:scaleY="2.6"
+        android:translateX="22.8"
+        android:translateY="22.8">
+        <path
+            android:pathData="M4.5,5H19.5A2,2 0,0 1,21.5 7V17A2,2 0,0 1,19.5 19H4.5A2,2 0,0 1,2.5 17V7A2,2 0,0 1,4.5 5Z M8,8.5A2,2 0,1 1,8 12.5A2,2 0,1 1,8 8.5Z M16,8.5A2,2 0,1 1,16 12.5A2,2 0,1 1,16 8.5Z M8,12.5L16,12.5 M6.5,19L8,15.8L16,15.8L17.5,19"
+            android:strokeWidth="1.8"
+            android:strokeColor="#FFFFFFFF"
+            android:strokeLineCap="round"
+            android:strokeLineJoin="round" />
+    </group>
+</vector>

@@ -137,7 +137,7 @@ class DownloadService : LifecycleService() {
                 if (entry.state != DownloadState.WAITING_NETWORK) app.library.update(entry.id) { it.copy(state = DownloadState.WAITING_NETWORK) }
                 continue
             }
-            if (jobs.size >= settings.parallelDownloads.coerceIn(1, 4)) break
+            if (jobs.size >= settings.parallelDownloads.coerceIn(1, AppSettings.MAX_PARALLEL_DOWNLOADS)) break
             app.library.update(entry.id) { it.copy(state = DownloadState.RUNNING, errorKind = null, errorDetail = null) }
             jobs[entry.id] = lifecycleScope.launch { runJob(entry.id) }
         }
