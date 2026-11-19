@@ -12,6 +12,13 @@ enum class AudioFormat { M4A, MP3, ORIGINAL }
 @Serializable
 enum class AudioQuality { HIGH, SAVER }
 
+/**
+ * The container of a video, and with it the preferred codecs: MP4 (H.264 + AAC) plays smoothly on every
+ * phone, WebM (VP9 + Opus) is smaller for the same picture, MKV takes the best picture in any codec.
+ */
+@Serializable
+enum class VideoFormat { MP4, WEBM, MKV }
+
 @Serializable
 enum class DownloadState { QUEUED, WAITING_NETWORK, RUNNING, DONE, FAILED, CANCELED }
 
@@ -21,7 +28,15 @@ data class DownloadOptions(
     val audioFormat: AudioFormat = AudioFormat.M4A,
     val audioQuality: AudioQuality = AudioQuality.HIGH,
     val videoHeight: Int = 720,
-)
+    val videoFormat: VideoFormat = VideoFormat.MP4,
+    /** yt-dlp format ids picked by hand from the list ("137+140"), for this one download only. */
+    val customFormat: String? = null,
+    /** How the hand-picked format reads in the sheet, e.g. "1080p60 · VP9 + Opus". */
+    val customLabel: String? = null,
+) {
+    /** What is kept as the next download's defaults: everything but a hand-picked format. */
+    fun asDefaults() = copy(customFormat = null, customLabel = null)
+}
 
 @Serializable
 data class Chapter(val title: String, val startMs: Long)

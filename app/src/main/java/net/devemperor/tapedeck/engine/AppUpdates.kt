@@ -149,6 +149,23 @@ class AppUpdates(private val http: OkHttpClient, private val settings: Settings)
 
     fun takePendingConfirmation(): Intent? = pendingConfirm.also { pendingConfirm = null }
 
+    private val _justUpdated = MutableStateFlow<String?>(null)
+
+    /** The version Tapedeck just updated itself to, for the success banner. */
+    val justUpdated: StateFlow<String?> = _justUpdated.asStateFlow()
+
+    /** Picks up the note [PackageReplacedReceiver] left after the update (once; the banner keeps it after). */
+    fun refreshJustUpdated(context: Context) {
+        val prefs = context.getSharedPreferences(PackageReplacedReceiver.PREFS, Context.MODE_PRIVATE)
+        val version = prefs.getString(PackageReplacedReceiver.KEY_UPDATED_TO, null) ?: return
+        prefs.edit().remove(PackageReplacedReceiver.KEY_UPDATED_TO).apply()
+        _justUpdated.value = version
+    }
+
+    fun dismissJustUpdated() {
+        _justUpdated.value = null
+    }
+
     /** Called by [InstallResultReceiver] when the installer gives up or the user declines. */
     fun onInstallFailed(message: String?) {
         _install.value = AppInstallState.Failed(message)

@@ -6,8 +6,9 @@
 
 ### Your tape deck for the road.
 
-Share a YouTube video, get it as audio — or video — on your phone, and listen offline:
-with the screen off, through the car stereo or Android Auto, and always from where you stopped.
+Share a video from YouTube, Instagram, TikTok & Co., get it as audio — or video — on your phone, and
+listen offline: with the screen off, through the car stereo or Android Auto, and always from where you
+stopped.
 
 <p>
   <a href="https://github.com/DevEmperor/Tapedeck/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/DevEmperor/Tapedeck?color=FF6B57&labelColor=17151a&label=release"></a>
@@ -71,8 +72,8 @@ with the screen off, through the car stereo or Android Auto, and always from whe
   <tr>
     <td align="center"><img src="docs/images/video.png" width="190" alt="A video playing in the player, with a full-screen button"></td>
     <td align="center"><img src="docs/images/notification.png" width="190" alt="The media notification with cover, play and pause, back 10 and forward 30 seconds"></td>
-    <td align="center"><img src="docs/images/settings.png" width="190" alt="Settings: share action, format, quality, resolution, Wi-Fi only, parallel downloads and SponsorBlock"></td>
-    <td align="center"><img src="docs/images/wheel.png" width="190" alt="Choosing after how many days downloads are deleted on a wheel like a timer's dial"></td>
+    <td align="center"><img src="docs/images/formats.png" width="190" alt="Choosing a format like yt-dlp -F: cards with resolution, codecs, size and bitrate; 1080p60 VP9 is picked and gets AAC sound to go with it"></td>
+    <td align="center"><img src="docs/images/settings.png" width="190" alt="Settings: offer copied links, SponsorBlock, and own sections for audio (format, quality) and video (format, resolution)"></td>
   </tr>
 </table>
 
@@ -82,15 +83,26 @@ with the screen off, through the car stereo or Android Auto, and always from whe
 
 ### Downloading
 
-- **Share and done.** Share a link from the YouTube app (or any of the
-  [sites yt-dlp supports](https://github.com/yt-dlp/yt-dlp/blob/master/supportedsites.md)), or paste one.
-  Tracking parameters are stripped, timestamps kept.
-- **Copied a link?** Open Tapedeck and it offers the YouTube link from your clipboard, with title and
-  picture — and tells you if that video is already in your library.
-- **Audio the way you need it.** **M4A** is YouTube's own AAC sound, saved without re-encoding; **MP3**
-  is for car stereos that play USB sticks; **Original** keeps the stream as it is (mostly Opus).
+- **Share and done.** Share a link from YouTube, Instagram, TikTok, X, Facebook, Reddit, SoundCloud,
+  Bandcamp, Dailymotion, the ARD/ZDF/arte Mediatheken — or any other of the
+  [sites yt-dlp supports](https://github.com/yt-dlp/yt-dlp/blob/master/supportedsites.md) — or paste one.
+  Tracking parameters (`si`, `igsh`, `utm_*`, TikTok's and X's share tokens …) are stripped, timestamps
+  kept.
+- **Title and picture first.** YouTube answers instantly; for other sites yt-dlp reads them while you
+  choose — and if a site wants a login (Instagram often does for anything not public), Tapedeck says so
+  before you download. Tapedeck has no logins or cookies, so it loads public posts only.
+- **Copied a link?** Open Tapedeck and it offers a link of a known video site from your clipboard — and
+  tells you if that video is already in your library.
+- **Audio the way you need it.** **M4A** is AAC, on YouTube saved without re-encoding; **MP3** is for car
+  stereos that play USB sticks; **Original** keeps the stream as it is (on YouTube mostly Opus).
   *High* quality, or *Data saver* at about 64 kbit/s — plenty for talks and podcasts.
-- **Video** in 360p to 1080p, preferring H.264 so every phone plays it smoothly.
+- **Video** in 360p to 1080p as **MP4** (H.264 + AAC, which every phone plays smoothly), **WebM**
+  (VP9 + Opus, smaller) or **MKV** (the best picture in any codec, often AV1).
+- **Or pick the exact stream**, like `yt-dlp -F`: *Custom…* lists every format as a card with resolution,
+  frame rate, HDR, codecs, size and bitrate — picture with sound, picture only, sound only. A picture-only
+  stream gets the best sound to go with it, which you can change; the sheet shows the total size.
+- Audio and video have **their own defaults** in the settings; the sheet remembers whether you last chose
+  audio or video.
 - **Whole playlists** in one go: share a playlist and get every video, in order.
 - **A real download manager.** A queue with 1–5 downloads at a time, a progress bar with speed and time
   left, a notification, and readable errors (unavailable, private, age-restricted, no space, …).
@@ -124,6 +136,11 @@ with the screen off, through the car stereo or Android Auto, and always from whe
 - **Android Auto** shows *Continue*, *New* and *All downloads*.
 - Speed from 0.75× to 2×, **skip silence**, **chapters**, and full-screen video with its own controls
   for when you are parked.
+- **Full screen with gestures**: double tap left or right for −10 / +10 s (keep tapping for more), or
+  press and slide sideways to scrub — both show how far you jump. A double tap on the video, or on the
+  mini player, goes straight to full screen.
+
+<p align="center"><img src="docs/images/gestures.png" width="760" alt="Full-screen video: a double tap on the right shows +30 s after three taps, and sliding sideways shows +0:29 and the target time 1:25 of 10:34"></p>
 - **Swipe Tapedeck away** in the recent apps and everything stops — playback and downloads. Unfinished
   downloads continue from where they were the next time you open it.
 
@@ -138,7 +155,8 @@ with the screen off, through the car stereo or Android Auto, and always from whe
 
 - Tapedeck asks GitHub for a new release when you open it. **Install** downloads the APK for your
   phone's processor, checks it against GitHub's SHA-256 checksum, and hands it to Android's installer —
-  no browser, no file hunting.
+  no browser, no file hunting. Once Android is done, the library says so where the banner was.
+- In the settings, **Update** sits right next to the yt-dlp version and **Check** next to Tapedeck's.
 
 <br>
 
@@ -175,8 +193,9 @@ signed with the same key, so later updates install over any of them.
 
 Tapedeck has no account, no analytics and no ads. It connects only to:
 
-- **YouTube** (or the site you shared), through yt-dlp, to download what you asked for, and YouTube's
-  oEmbed endpoint for the title and picture in the download sheet;
+- **YouTube** (or the site you shared), through yt-dlp, to download what you asked for, to list its
+  formats when you tap *Custom…*, and — for sites other than YouTube — to read title and picture for the
+  download sheet; for YouTube that comes from its oEmbed endpoint;
 - **GitHub**, to check for and download updates of yt-dlp and of Tapedeck;
 - **SponsorBlock**, only if *Skip sponsor segments* is on (yt-dlp sends a short hash prefix of the
   video id).
@@ -207,7 +226,7 @@ Release builds are signed with the key from an untracked `keystore.properties` (
 ## ⚖️ Please note
 
 Only download what you may keep — your own videos, freely licensed content, or a private copy where
-your law allows it. YouTube's terms of service restrict downloading. The screenshots show
+your law allows it. The terms of YouTube, Instagram and other sites restrict downloading. The screenshots show
 [Blender Studio's open movies](https://studio.blender.org/films/) (CC BY).
 
 ## 📄 License

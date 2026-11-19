@@ -32,7 +32,12 @@ import net.devemperor.tapedeck.data.Storage
 import net.devemperor.tapedeck.download.NewDownload
 import net.devemperor.tapedeck.engine.AppInstallState
 import net.devemperor.tapedeck.engine.Engine
+import net.devemperor.tapedeck.engine.ErrorKind
+import net.devemperor.tapedeck.engine.Errors
+import net.devemperor.tapedeck.engine.Formats
 import net.devemperor.tapedeck.engine.Links
+import net.devemperor.tapedeck.engine.MediaDetails
+import net.devemperor.tapedeck.engine.MediaFormat
 import net.devemperor.tapedeck.engine.Playlist
 import net.devemperor.tapedeck.engine.PreviewInfo
 import net.devemperor.tapedeck.player.PlayerConnection
@@ -48,13 +53,23 @@ data class AddSheetState(
     val loadingPlaylist: Boolean = false,
     val playlistFailed: Boolean = false,
     val alreadyInLibrary: Boolean = false,
+    /** Everything yt-dlp told about the link (`-J`): the format list, and the preview of non-YouTube sites. */
+    val details: MediaDetails? = null,
+    val loadingDetails: Boolean = false,
+    /** [net.devemperor.tapedeck.engine.ErrorKind] name when yt-dlp could not read the link. */
+    val detailsError: String? = null,
+    /** The sheet shows the list of formats instead of the options. */
+    val showFormats: Boolean = false,
 ) {
     val link: String? get() = Links.extractUrl(url)
     val canStart: Boolean
         get() = link != null && (!wholePlaylist || playlist?.items?.isNotEmpty() == true)
+
+    /** Formats are per video, so a whole playlist always goes by the presets. */
+    val canPickFormat: Boolean get() = link != null && !wholePlaylist
 }
 
-/** A YouTube link found in the clipboard, offered at the top of the library. */
+/** A video link (YouTube, Instagram, …) found in the clipboard, offered at the top of the library. */
 data class ClipOffer(val url: String, val preview: PreviewInfo? = null)
 
 sealed interface UiEvent {
@@ -107,7 +122,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     /** "Add link" without a link takes the one last seen in the clipboard, if it is not downloaded already. */
     fun openSheet(url: String? = null) {
         _clipOffer.value = null
-        _sheet.value = AddSheetState(options = settings.value.defaults)
+        _sheet.value = AddSheetState(options = settings.value.defaults.asDefaults())
         val prefill = url ?: clipUrl?.takeIf { !inLibrary(it) }
         if (prefill != null) onUrlChanged(prefill)
     }
@@ -121,7 +136,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     /**
      * Called when the window gains focus — Android only lets the focused app read the clipboard. A clip is
      * read once, when it is newer than the last one looked at (each read shows Android's "pasted" toast);
-     * nothing of it is stored but its timestamp. A YouTube link not in the library yet is offered.
+     * nothing of it is stored but its timestamp. A link to a known video site not in the library yet is offered.
      */
     fun checkClipboard(context: Context) {
         if (!settings.value.watchClipboard || _sheet.value != null) return
@@ -139,9 +154,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun considerClipText(text: String) {
         val url = Links.extractUrl(text) ?: return
         clipUrl = url
-        if (!Links.isYoutube(url) || inLibrary(url)) return
+        if (!Links.isKnownSite(url) || inLibrary(url)) return
         _clipOffer.value = ClipOffer(url)
-        viewModelScope.launch {
+        // Only YouTube answers quickly (oEmbed); other sites would need a whole yt-dlp run just for the card.
+        if (Links.isYoutube(url)) viewModelScope.launch {
             val preview = app.preview.fetch(Links.clean(url))
             _clipOffer.update { if (it?.url == url) it.copy(preview = preview) else it }
         }
@@ -169,6 +185,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun closeSheet() {
         previewJob?.cancel()
         playlistJob?.cancel()
+        detailsJob?.cancel()
         _sheet.value = null
     }
 
@@ -180,24 +197,82 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 url = text, preview = null, loadingPreview = url != null, playlist = null, playlistFailed = false,
                 playlistId = url?.let(Links::playlistId), wholePlaylist = playlistOnly,
                 alreadyInLibrary = url != null && !playlistOnly && inLibrary(url),
+                details = null, loadingDetails = false, detailsError = null, showFormats = false,
+                options = it.options.asDefaults(),
             )
         }
         previewJob?.cancel()
         playlistJob?.cancel()
+        detailsJob?.cancel()
         if (url == null) return
         previewJob = viewModelScope.launch {
             delay(250)
             val info = app.preview.fetch(Links.clean(url))
-            _sheet.update { if (it?.url == text) it.copy(preview = info, loadingPreview = false) else it }
+            _sheet.update { if (it?.url == text) it.copy(preview = info, loadingPreview = info == null && !Links.isYoutube(url)) else it }
+            // Instagram, Vimeo & Co. have no quick oEmbed: yt-dlp reads title and picture (and the formats with them).
+            if (info == null && !Links.isYoutube(url)) loadDetails()
         }
         if (playlistOnly) loadPlaylist()
     }
 
-    fun setOptions(options: DownloadOptions) = _sheet.update { it?.copy(options = options) }
+    fun setOptions(options: DownloadOptions) = _sheet.update { sheet ->
+        // A picked stream belongs to Audio or Video; switching drops it.
+        sheet?.copy(options = if (options.kind != sheet.options.kind) options.asDefaults() else options)
+    }
 
     fun setWholePlaylist(whole: Boolean) {
-        _sheet.update { it?.copy(wholePlaylist = whole) }
+        _sheet.update { it?.copy(wholePlaylist = whole, options = if (whole) it.options.asDefaults() else it.options) }
         if (whole && _sheet.value?.playlist == null) loadPlaylist()
+    }
+
+    private var detailsJob: Job? = null
+
+    /** "Custom…": the sheet turns into the format list, read from yt-dlp the first time. */
+    fun openFormats() {
+        val sheet = _sheet.value ?: return
+        if (!sheet.canPickFormat) return
+        _sheet.update { it?.copy(showFormats = true) }
+        if (sheet.details == null && !sheet.loadingDetails) loadDetails()
+    }
+
+    fun closeFormats() = _sheet.update { it?.copy(showFormats = false) }
+
+    fun retryDetails() = loadDetails()
+
+    /** Picture (maybe with its own sound) and/or sound from the list; null for both goes back to the presets. */
+    fun pickFormat(video: MediaFormat?, audio: MediaFormat?) {
+        val selector = Formats.selector(video, audio)
+        val label = Formats.label(video, audio) { app.getString(R.string.format_kbit, it) }
+        _sheet.update { it?.copy(options = it.options.copy(customFormat = selector, customLabel = label), showFormats = false) }
+    }
+
+    fun clearCustomFormat() = _sheet.update { it?.copy(options = it.options.asDefaults()) }
+
+    private fun loadDetails() {
+        val sheet = _sheet.value ?: return
+        val link = sheet.link ?: return
+        detailsJob?.cancel()
+        _sheet.update { it?.copy(loadingDetails = true, detailsError = null) }
+        detailsJob = viewModelScope.launch {
+            val result = runCatching { Engine.inspect(app, Links.clean(link), app.settings) }
+            if (result.exceptionOrNull() is kotlinx.coroutines.CancellationException) return@launch
+            result.exceptionOrNull()?.let { Log.w("TapedeckFormats", "reading formats failed", it) }
+            val details = result.getOrNull()
+            val error = result.exceptionOrNull()?.let { e ->
+                (if (e is com.yausername.youtubedl_android.YoutubeDLException) Errors.classify(e.message) else null)?.kind?.name ?: ErrorKind.UNKNOWN.name
+            }
+            _sheet.update {
+                if (it?.url != sheet.url) it
+                else it.copy(
+                    details = details,
+                    loadingDetails = false,
+                    detailsError = error,
+                    // Sites without oEmbed get their card from here.
+                    preview = it.preview ?: details?.takeIf { d -> d.title != null }?.let { d -> PreviewInfo(d.title!!, d.uploader, d.thumbnailUrl) },
+                    loadingPreview = false,
+                )
+            }
+        }
     }
 
     private fun loadPlaylist() {
@@ -219,12 +294,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun confirmSheet() {
         val sheet = _sheet.value ?: return
         val link = sheet.link ?: return
-        app.settings.update { it.copy(defaults = sheet.options) }
+        // The sheet's choice (Audio or Video included) is where the next download starts; a picked stream is not.
+        app.settings.update { it.copy(defaults = sheet.options.asDefaults()) }
         val playlist = sheet.playlist
         val requests = if (sheet.wholePlaylist && playlist != null) {
-            playlist.items.map { NewDownload(it.url, sheet.options, it.title, it.uploader, it.thumbnailUrl, it.durationMs) }
+            playlist.items.map { NewDownload(it.url, sheet.options.asDefaults(), it.title, it.uploader, it.thumbnailUrl, it.durationMs) }
         } else {
-            listOf(NewDownload(link, sheet.options, sheet.preview?.title, sheet.preview?.author, sheet.preview?.thumbnailUrl))
+            listOf(
+                NewDownload(
+                    link, sheet.options, sheet.preview?.title, sheet.preview?.author, sheet.preview?.thumbnailUrl,
+                    sheet.details?.durationMs ?: 0,
+                ),
+            )
         }
         app.downloads.enqueue(requests)
         closeSheet()
@@ -320,6 +401,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     /** A newer Tapedeck on GitHub, until "Later" puts it away. */
     val appUpdate = app.appUpdates.available
+
+    /** The version Android just installed through Tapedeck's own update, for the success banner. */
+    val justUpdated = app.appUpdates.justUpdated
+
+    fun refreshJustUpdated() = app.appUpdates.refreshJustUpdated(app)
+
+    fun dismissJustUpdated() = app.appUpdates.dismissJustUpdated()
     val appInstall: StateFlow<AppInstallState> = app.appUpdates.install
     private var installJob: Job? = null
 

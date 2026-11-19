@@ -7,8 +7,11 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
-import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.clickable
@@ -31,6 +34,8 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.List
+import androidx.compose.material.icons.rounded.FastForward
+import androidx.compose.material.icons.rounded.FastRewind
 import androidx.compose.material.icons.rounded.Forward30
 import androidx.compose.material.icons.rounded.Fullscreen
 import androidx.compose.material.icons.rounded.FullscreenExit
@@ -73,6 +78,7 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -95,11 +101,12 @@ import net.devemperor.tapedeck.R
 import net.devemperor.tapedeck.data.Chapter
 import net.devemperor.tapedeck.data.Entry
 import java.io.File
+import kotlin.math.abs
 
 private val SPEEDS = listOf(0.75f, 1f, 1.1f, 1.25f, 1.5f, 1.75f, 2f)
 
 @Composable
-fun PlayerScreen(vm: MainViewModel, onClose: () -> Unit) {
+fun PlayerScreen(vm: MainViewModel, startFullscreen: Boolean = false, onClose: () -> Unit) {
     val state by vm.player.state.collectAsStateWithLifecycle()
     val controller by vm.player.controller.collectAsStateWithLifecycle()
     val entries by vm.entries.collectAsStateWithLifecycle()
@@ -119,7 +126,7 @@ fun PlayerScreen(vm: MainViewModel, onClose: () -> Unit) {
         }
     }
     val duration = state.durationMs.takeIf { it > 0 } ?: entry.durationMs
-    var fullscreen by rememberSaveable { mutableStateOf(false) }
+    var fullscreen by rememberSaveable { mutableStateOf(startFullscreen) }
     var chaptersOpen by remember { mutableStateOf(false) }
 
     if (fullscreen && entry.isVideo) {
@@ -157,6 +164,8 @@ fun PlayerScreen(vm: MainViewModel, onClose: () -> Unit) {
             if (entry.isVideo) {
                 Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f).shadow(18.dp, MaterialTheme.shapes.large).clip(MaterialTheme.shapes.large)) {
                     VideoSurface(controller, Modifier.fillMaxSize())
+                    // A double tap on the picture goes full screen, as the button does.
+                    Box(Modifier.matchParentSize().pointerInput(Unit) { detectTapGestures(onDoubleTap = { fullscreen = true }) })
                     IconButton(
                         onClick = { fullscreen = true },
                         modifier = Modifier.align(Alignment.BottomEnd).padding(6.dp).background(Color.Black.copy(alpha = 0.45f), CircleShape),
@@ -363,13 +372,90 @@ private fun FullscreenVideo(vm: MainViewModel, controller: Player?, entry: Entry
         }
     }
 
-    Box(
-        Modifier.fillMaxSize().background(Color.Black).clickable(
-            interactionSource = remember { MutableInteractionSource() },
-            indication = null,
-        ) { if (controls) controls = false else touched() },
-    ) {
+    // Double tap left or right: 10 s back or ahead, and every further tap on that side within a moment adds
+    // 10 s more (−10, −20, −30 …). Press and slide sideways: scrub, with the jump and the target shown.
+    var seekFeedback by remember { mutableStateOf<SeekFeedback?>(null) }
+    var scrub by remember { mutableStateOf<Scrub?>(null) }
+    fun clamp(ms: Long) = if (duration > 0) ms.coerceIn(0, duration) else ms.coerceAtLeast(0)
+    fun seekStep(forward: Boolean) {
+        val now = System.currentTimeMillis()
+        val chained = seekFeedback?.takeIf { it.forward == forward && now - it.at < SEEK_CHAIN_MS }
+        val target = clamp(vm.player.currentPosition() + if (forward) DOUBLE_TAP_SEEK_MS else -DOUBLE_TAP_SEEK_MS)
+        vm.player.seekTo(target)
+        position = target
+        seekFeedback = SeekFeedback(forward, (chained?.totalMs ?: 0) + DOUBLE_TAP_SEEK_MS, now)
+    }
+    LaunchedEffect(seekFeedback) {
+        if (seekFeedback != null) {
+            delay(SEEK_CHAIN_MS)
+            seekFeedback = null
+        }
+    }
+
+    Box(Modifier.fillMaxSize().background(Color.Black)) {
         VideoSurface(controller, Modifier.fillMaxSize())
+        // Above the picture and below the controls: their buttons and seek bar keep their own touches.
+        Box(
+            Modifier.fillMaxSize()
+                .pointerInput(duration) {
+                    // While the jump is still shown, every further tap on that side counts at once (on the
+                    // press itself, not after the wait for a possible second tap) and is no tap or double tap.
+                    var chained = false
+                    detectTapGestures(
+                        onPress = { offset ->
+                            val forward = offset.x > size.width / 2
+                            chained = seekFeedback?.let { it.forward == forward && System.currentTimeMillis() - it.at < SEEK_CHAIN_MS } == true
+                            if (chained) seekStep(forward)
+                        },
+                        onTap = {
+                            when {
+                                chained -> Unit
+                                controls -> controls = false
+                                else -> touched()
+                            }
+                        },
+                        onDoubleTap = { offset -> if (!chained) seekStep(offset.x > size.width / 2) },
+                    )
+                }
+                .pointerInput(duration) {
+                    var start = 0L
+                    var travelled = 0f
+                    var lastSent = 0L
+                    detectHorizontalDragGestures(
+                        onDragStart = {
+                            start = vm.player.currentPosition()
+                            travelled = 0f
+                            lastSent = start
+                            seekFeedback = null
+                            controls = false
+                            scrub = Scrub(start, start)
+                        },
+                        onHorizontalDrag = { change, amount ->
+                            change.consume()
+                            travelled += amount
+                            // One swipe across the screen covers a quarter of the video, between 1.5 and 10 minutes.
+                            val span = (duration / 4).coerceIn(SCRUB_SPAN_MIN_MS, SCRUB_SPAN_MAX_MS)
+                            val target = clamp(start + (travelled / size.width * span).toLong())
+                            scrub = Scrub(start, target)
+                            // The picture follows the finger, without sending the player a seek for every pixel.
+                            if (abs(target - lastSent) >= SCRUB_SEEK_STEP_MS) {
+                                vm.player.seekTo(target)
+                                lastSent = target
+                            }
+                        },
+                        onDragEnd = {
+                            scrub?.let {
+                                vm.player.seekTo(it.target)
+                                position = it.target
+                            }
+                            scrub = null
+                        },
+                        onDragCancel = { scrub = null },
+                    )
+                },
+        )
+        seekFeedback?.let { SeekSide(it, Modifier.align(if (it.forward) Alignment.CenterEnd else Alignment.CenterStart)) }
+        scrub?.let { ScrubBadge(it, duration, Modifier.align(Alignment.Center)) }
         AnimatedVisibility(controls, enter = fadeIn(), exit = fadeOut()) {
             Box(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.displayCutout)) {
                 Row(
@@ -438,6 +524,64 @@ private fun FullscreenVideo(vm: MainViewModel, controller: Player?, entry: Entry
 }
 
 private const val CONTROLS_TIMEOUT_MS = 3_500L
+private const val DOUBLE_TAP_SEEK_MS = 10_000L
+private const val SEEK_CHAIN_MS = 1_000L
+private const val SCRUB_SPAN_MIN_MS = 90_000L
+private const val SCRUB_SPAN_MAX_MS = 600_000L
+private const val SCRUB_SEEK_STEP_MS = 400L
+
+/** The jump of the latest double taps, shown on its side of the screen. */
+private data class SeekFeedback(val forward: Boolean, val totalMs: Long, val at: Long)
+
+/** A scrub in progress: where it started and where the finger is now. */
+private data class Scrub(val start: Long, val target: Long)
+
+/** A half-round glow on the tapped side with ⏪ "−30 s", like other video players. */
+@Composable
+private fun SeekSide(feedback: SeekFeedback, modifier: Modifier) {
+    val shape = if (feedback.forward) {
+        RoundedCornerShape(topStartPercent = 50, bottomStartPercent = 50)
+    } else {
+        RoundedCornerShape(topEndPercent = 50, bottomEndPercent = 50)
+    }
+    Box(
+        modifier.fillMaxHeight().fillMaxWidth(0.32f).clip(shape).background(Color.White.copy(alpha = 0.22f)),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Icon(
+                if (feedback.forward) Icons.Rounded.FastForward else Icons.Rounded.FastRewind,
+                null, tint = Color.White, modifier = Modifier.size(40.dp),
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                (if (feedback.forward) "+" else "−") + stringResource(R.string.seconds_short, (feedback.totalMs / 1000).toInt()),
+                style = MaterialTheme.typography.titleMedium,
+                color = Color.White,
+            )
+        }
+    }
+}
+
+/** "+1:25" big, "12:34 / 45:00" below it, while sliding. */
+@Composable
+private fun ScrubBadge(scrub: Scrub, duration: Long, modifier: Modifier) {
+    val delta = scrub.target - scrub.start
+    Surface(shape = MaterialTheme.shapes.large, color = Color.Black.copy(alpha = 0.6f), modifier = modifier) {
+        Column(Modifier.padding(horizontal = 22.dp, vertical = 12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(
+                (if (delta < 0) "−" else "+") + Format.clock(abs(delta)),
+                style = MaterialTheme.typography.headlineMedium,
+                color = Color.White,
+            )
+            Text(
+                Format.clock(scrub.target) + if (duration > 0) " / " + Format.clock(duration) else "",
+                style = MaterialTheme.typography.labelLarge,
+                color = Color.White.copy(alpha = 0.8f),
+            )
+        }
+    }
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

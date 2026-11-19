@@ -28,6 +28,8 @@ class PackageReplacedReceiver : BroadcastReceiver() {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().remove(KEY_PENDING).apply()
         // Only after an update Tapedeck installed itself, not after adb or a store.
         if (!updatedHere) return
+        // The library shows "Tapedeck x.y is installed" where the install banner was, the next time it opens.
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString(KEY_UPDATED_TO, BuildConfig.VERSION_NAME).commit()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
             ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
         ) return
@@ -48,6 +50,7 @@ class PackageReplacedReceiver : BroadcastReceiver() {
     companion object {
         const val PREFS = "app_update"
         const val KEY_PENDING = "pending"
+        const val KEY_UPDATED_TO = "updated_to"
         private const val ID_UPDATED = 2
 
         /** Marks that the next package replacement is Tapedeck's own update. */

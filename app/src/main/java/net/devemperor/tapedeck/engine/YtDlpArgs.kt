@@ -4,6 +4,7 @@ import net.devemperor.tapedeck.data.AudioFormat
 import net.devemperor.tapedeck.data.AudioQuality
 import net.devemperor.tapedeck.data.DownloadOptions
 import net.devemperor.tapedeck.data.MediaKind
+import net.devemperor.tapedeck.data.VideoFormat
 
 /**
  * The yt-dlp command line for one download. Every entry gets its own folder with fixed file names
@@ -29,9 +30,10 @@ object YtDlpArgs {
         add("--convert-thumbnails"); add("jpg")
         add("--write-info-json")
         add("--embed-metadata")
+        val custom = options.customFormat
         when (options.kind) {
-            MediaKind.AUDIO -> addAll(audio(options.audioFormat, options.audioQuality))
-            MediaKind.VIDEO -> addAll(video(options.videoHeight))
+            MediaKind.AUDIO -> addAll(if (custom != null) customAudio(custom) else audio(options.audioFormat, options.audioQuality))
+            MediaKind.VIDEO -> addAll(if (custom != null) customVideo(custom, options.videoFormat) else video(options.videoHeight, options.videoFormat))
         }
         if (sponsorBlock) {
             add("--sponsorblock-remove"); add("sponsor,selfpromo,interaction")
@@ -65,13 +67,38 @@ object YtDlpArgs {
         }
     }
 
-    fun video(height: Int): List<String> = listOf(
+    fun video(height: Int, format: VideoFormat = VideoFormat.MP4): List<String> = listOf(
         "-f", "bv*+ba/b",
-        // Closest to the wanted height, then H.264 + AAC: every phone decodes those in hardware.
-        "-S", "res:$height,vcodec:h264,acodec:m4a",
-        "--merge-output-format", "mp4",
+        // Closest to the wanted height first, then the codecs that suit the container: H.264 + AAC for MP4
+        // (every phone decodes those in hardware), VP9 + Opus for WebM, and for MKV simply the best.
+        "-S", when (format) {
+            VideoFormat.MP4 -> "res:$height,vcodec:h264,acodec:m4a"
+            VideoFormat.WEBM -> "res:$height,vcodec:vp9,acodec:opus"
+            VideoFormat.MKV -> "res:$height"
+        },
+        "--merge-output-format", containers(format),
     )
+
+    /** Exactly the streams picked from the list, put together in the chosen container. */
+    fun customVideo(formatId: String, format: VideoFormat): List<String> =
+        listOf("-f", formatId, "--merge-output-format", containers(format))
+
+    /** Exactly the stream picked from the list, kept as it is (no re-encoding). */
+    fun customAudio(formatId: String): List<String> = listOf("-f", formatId, "-x")
+
+    /**
+     * Where picture and sound may be merged. WebM only holds VP8/VP9/AV1 with Opus/Vorbis, so H.264 from
+     * other sites falls back to MKV instead of failing; MP4 and MKV take everything YouTube offers.
+     */
+    fun containers(format: VideoFormat): String = when (format) {
+        VideoFormat.MP4 -> "mp4"
+        VideoFormat.WEBM -> "webm/mkv"
+        VideoFormat.MKV -> "mkv"
+    }
 
     /** Lists a playlist's videos without resolving any of them (fast, no JavaScript challenge). */
     fun playlist(): List<String> = listOf("--flat-playlist", "--yes-playlist", "-J")
+
+    /** Everything yt-dlp knows about one video, formats included, without downloading it. */
+    fun inspect(): List<String> = listOf("--no-playlist", "-J")
 }

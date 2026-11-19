@@ -42,6 +42,8 @@ enum class Screen { LIBRARY, PLAYER, SETTINGS }
 @Composable
 fun TapedeckRoot(vm: MainViewModel) {
     var screen by rememberSaveable { mutableStateOf(Screen.LIBRARY) }
+    // A double tap on the mini player opens a video straight in full screen.
+    var playerFullscreen by rememberSaveable { mutableStateOf(false) }
     val sheet by vm.sheet.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
     val context = LocalContext.current
@@ -75,12 +77,23 @@ fun TapedeckRoot(vm: MainViewModel) {
     BackHandler(enabled = screen != Screen.LIBRARY) { screen = Screen.LIBRARY }
 
     Box(Modifier.fillMaxSize()) {
-        LibraryScreen(vm, onOpenPlayer = { screen = Screen.PLAYER }, onOpenSettings = { screen = Screen.SETTINGS })
+        LibraryScreen(
+            vm,
+            onOpenPlayer = {
+                playerFullscreen = false
+                screen = Screen.PLAYER
+            },
+            onOpenFullscreen = {
+                playerFullscreen = true
+                screen = Screen.PLAYER
+            },
+            onOpenSettings = { screen = Screen.SETTINGS },
+        )
         AnimatedVisibility(
             screen == Screen.PLAYER,
             enter = slideInVertically { it } + fadeIn(),
             exit = slideOutVertically { it } + fadeOut(),
-        ) { PlayerScreen(vm, onClose = { screen = Screen.LIBRARY }) }
+        ) { PlayerScreen(vm, startFullscreen = playerFullscreen, onClose = { screen = Screen.LIBRARY }) }
         AnimatedVisibility(
             screen == Screen.SETTINGS,
             enter = slideInHorizontally { it } + fadeIn(),
@@ -102,6 +115,11 @@ fun TapedeckRoot(vm: MainViewModel) {
             onUrl = vm::onUrlChanged,
             onOptions = vm::setOptions,
             onWholePlaylist = vm::setWholePlaylist,
+            onOpenFormats = vm::openFormats,
+            onCloseFormats = vm::closeFormats,
+            onPickFormat = vm::pickFormat,
+            onClearCustom = vm::clearCustomFormat,
+            onRetryDetails = vm::retryDetails,
             onConfirm = {
                 askForNotifications()
                 vm.confirmSheet()

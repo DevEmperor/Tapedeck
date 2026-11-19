@@ -1,8 +1,16 @@
 package net.devemperor.tapedeck.ui
 
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -25,8 +33,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.PlaylistPlay
+import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.ContentPaste
 import androidx.compose.material.icons.rounded.Download
+import androidx.compose.material.icons.rounded.ErrorOutline
+import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material.icons.rounded.Headphones
 import androidx.compose.material.icons.rounded.LibraryMusic
 import androidx.compose.material.icons.rounded.Link
@@ -53,6 +64,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.res.pluralStringResource
@@ -65,8 +77,10 @@ import net.devemperor.tapedeck.data.AudioFormat
 import net.devemperor.tapedeck.data.AudioQuality
 import net.devemperor.tapedeck.data.DownloadOptions
 import net.devemperor.tapedeck.data.MediaKind
+import net.devemperor.tapedeck.data.VideoFormat
+import net.devemperor.tapedeck.engine.MediaFormat
 
-private val VIDEO_HEIGHTS = listOf(360, 480, 720, 1080)
+val VIDEO_HEIGHTS = listOf(360, 480, 720, 1080)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -75,11 +89,46 @@ fun AddSheet(
     onUrl: (String) -> Unit,
     onOptions: (DownloadOptions) -> Unit,
     onWholePlaylist: (Boolean) -> Unit,
+    onOpenFormats: () -> Unit,
+    onCloseFormats: () -> Unit,
+    onPickFormat: (MediaFormat?, MediaFormat?) -> Unit,
+    onClearCustom: () -> Unit,
+    onRetryDetails: () -> Unit,
     onConfirm: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState, containerColor = MaterialTheme.colorScheme.surfaceContainerLow) {
+        // Back on the format list returns to the options instead of closing the sheet.
+        BackHandler(enabled = state.showFormats, onBack = onCloseFormats)
+        AnimatedContent(
+            targetState = state.showFormats,
+            transitionSpec = {
+                val dir = if (targetState) 1 else -1
+                (slideInHorizontally { it * dir / 3 } + fadeIn()) togetherWith (slideOutHorizontally { -it * dir / 3 } + fadeOut())
+            },
+            label = "add-sheet-page",
+        ) { formats ->
+            if (formats) {
+                FormatsPage(state, onBack = onCloseFormats, onPick = onPickFormat, onRetry = onRetryDetails)
+            } else {
+                OptionsPage(state, onUrl, onOptions, onWholePlaylist, onOpenFormats, onClearCustom, onConfirm)
+            }
+        }
+    }
+}
+
+@Composable
+private fun OptionsPage(
+    state: AddSheetState,
+    onUrl: (String) -> Unit,
+    onOptions: (DownloadOptions) -> Unit,
+    onWholePlaylist: (Boolean) -> Unit,
+    onOpenFormats: () -> Unit,
+    onClearCustom: () -> Unit,
+    onConfirm: () -> Unit,
+) {
+    run {
         Column(
             Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).imePadding().navigationBarsPadding()
                 .padding(horizontal = 20.dp).padding(bottom = 16.dp),
@@ -106,6 +155,16 @@ fun AddSheet(
             )
 
             PreviewCard(state)
+
+            // Sites without oEmbed are read by yt-dlp right away, so a login wall shows before the download.
+            val previewError = state.detailsError
+            if (previewError != null && state.preview == null && !state.loadingPreview) {
+                Row(Modifier.padding(top = 10.dp, start = 4.dp), verticalAlignment = Alignment.Top) {
+                    Icon(Icons.Rounded.ErrorOutline, null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(16.dp).padding(top = 1.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text(stringResource(errorText(previewError)), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                }
+            }
 
             if (state.alreadyInLibrary) {
                 Row(Modifier.padding(top = 10.dp, start = 4.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -145,41 +204,62 @@ fun AddSheet(
 
             Spacer(Modifier.height(14.dp))
             Box(Modifier.animateContentSize()) {
+                val custom = options.customFormat != null
+                // Picking from the list works for one video; a whole playlist goes by the presets.
+                val customChip: @Composable () -> Unit = {
+                    if (state.canPickFormat) {
+                        Chip(stringResource(R.string.format_custom), custom, leading = Icons.Rounded.Tune, onClick = onOpenFormats)
+                    }
+                }
                 if (options.kind == MediaKind.AUDIO) {
                     Column {
                         OptionLabel(R.string.option_format)
                         ChipRow {
                             AudioFormat.entries.forEach { format ->
-                                Chip(stringResource(audioFormatLabel(format)), options.audioFormat == format) { onOptions(options.copy(audioFormat = format)) }
+                                // A picked stream is saved as it is, so the format does not apply to it.
+                                Chip(stringResource(audioFormatLabel(format)), !custom && options.audioFormat == format, enabled = !custom) {
+                                    onOptions(options.copy(audioFormat = format))
+                                }
                             }
                         }
                         Spacer(Modifier.height(10.dp))
                         OptionLabel(R.string.option_quality)
                         ChipRow {
-                            Chip(stringResource(R.string.quality_high), options.audioQuality == AudioQuality.HIGH) { onOptions(options.copy(audioQuality = AudioQuality.HIGH)) }
-                            Chip(stringResource(R.string.quality_saver), options.audioQuality == AudioQuality.SAVER) { onOptions(options.copy(audioQuality = AudioQuality.SAVER)) }
+                            Chip(stringResource(R.string.quality_high), !custom && options.audioQuality == AudioQuality.HIGH) {
+                                onOptions(options.asDefaults().copy(audioQuality = AudioQuality.HIGH))
+                            }
+                            Chip(stringResource(R.string.quality_saver), !custom && options.audioQuality == AudioQuality.SAVER) {
+                                onOptions(options.asDefaults().copy(audioQuality = AudioQuality.SAVER))
+                            }
+                            customChip()
                         }
-                        Text(
-                            stringResource(formatHint(options.audioFormat, options.audioQuality)),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(top = 8.dp),
-                        )
+                        if (custom) {
+                            CustomFormatCard(options, R.string.custom_audio_hint, onOpenFormats, onClearCustom)
+                        } else {
+                            Hint(audioHint(options.audioFormat, options.audioQuality))
+                        }
                     }
                 } else {
                     Column {
+                        OptionLabel(R.string.option_format)
+                        ChipRow {
+                            VideoFormat.entries.forEach { format ->
+                                Chip(stringResource(videoFormatLabel(format)), options.videoFormat == format) { onOptions(options.copy(videoFormat = format)) }
+                            }
+                        }
+                        Spacer(Modifier.height(10.dp))
                         OptionLabel(R.string.option_resolution)
                         ChipRow {
                             VIDEO_HEIGHTS.forEach { height ->
-                                Chip("${height}p", options.videoHeight == height) { onOptions(options.copy(videoHeight = height)) }
+                                Chip("${height}p", !custom && options.videoHeight == height) { onOptions(options.asDefaults().copy(videoHeight = height)) }
                             }
+                            customChip()
                         }
-                        Text(
-                            stringResource(R.string.video_hint),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(top = 8.dp),
-                        )
+                        if (custom) {
+                            CustomFormatCard(options, R.string.custom_video_hint, onOpenFormats, onClearCustom)
+                        } else {
+                            Hint(videoHint(options.videoFormat))
+                        }
                     }
                 }
             }
@@ -274,6 +354,44 @@ private fun PlaylistRow(state: AddSheetState, onWholePlaylist: (Boolean) -> Unit
 }
 
 @Composable
+private fun Hint(text: Int) {
+    Text(
+        stringResource(text),
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(top = 8.dp),
+    )
+}
+
+/** The stream picked from the list, with "Change" and × back to the presets. */
+@Composable
+private fun CustomFormatCard(options: DownloadOptions, hint: Int, onChange: () -> Unit, onClear: () -> Unit) {
+    Surface(
+        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f),
+        shape = MaterialTheme.shapes.medium,
+        modifier = Modifier.fillMaxWidth().padding(top = 10.dp).clip(MaterialTheme.shapes.medium).clickable(onClick = onChange),
+    ) {
+        Row(Modifier.padding(start = 14.dp, top = 10.dp, bottom = 10.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Rounded.Tune, null, tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(20.dp))
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text(
+                    options.customLabel ?: options.customFormat.orEmpty(),
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                )
+                Text(
+                    stringResource(R.string.custom_format_ids, options.customFormat.orEmpty()) + " · " + stringResource(hint),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f),
+                )
+            }
+            IconButton(onClick = onClear) { Icon(Icons.Rounded.Close, stringResource(R.string.custom_clear), tint = MaterialTheme.colorScheme.onPrimaryContainer) }
+        }
+    }
+}
+
+@Composable
 private fun OptionLabel(text: Int) {
     Text(
         stringResource(text),
@@ -290,11 +408,13 @@ private fun ChipRow(content: @Composable () -> Unit) {
 }
 
 @Composable
-private fun Chip(label: String, selected: Boolean, onClick: () -> Unit) {
+private fun Chip(label: String, selected: Boolean, enabled: Boolean = true, leading: ImageVector? = null, onClick: () -> Unit) {
     FilterChip(
         selected = selected,
         onClick = onClick,
+        enabled = enabled,
         label = { Text(label) },
+        leadingIcon = leading?.let { icon -> { Icon(icon, null, Modifier.size(18.dp)) } },
         shape = CircleShape,
         colors = FilterChipDefaults.filterChipColors(
             selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
@@ -303,9 +423,21 @@ private fun Chip(label: String, selected: Boolean, onClick: () -> Unit) {
     )
 }
 
-private fun formatHint(format: AudioFormat, quality: AudioQuality): Int = when {
+fun audioHint(format: AudioFormat, quality: AudioQuality): Int = when {
     quality == AudioQuality.SAVER -> R.string.hint_saver
     format == AudioFormat.M4A -> R.string.hint_m4a
     format == AudioFormat.MP3 -> R.string.hint_mp3
     else -> R.string.hint_original
+}
+
+fun videoFormatLabel(format: VideoFormat): Int = when (format) {
+    VideoFormat.MP4 -> R.string.format_mp4
+    VideoFormat.WEBM -> R.string.format_webm
+    VideoFormat.MKV -> R.string.format_mkv
+}
+
+fun videoHint(format: VideoFormat): Int = when (format) {
+    VideoFormat.MP4 -> R.string.hint_mp4
+    VideoFormat.WEBM -> R.string.hint_webm
+    VideoFormat.MKV -> R.string.hint_mkv
 }

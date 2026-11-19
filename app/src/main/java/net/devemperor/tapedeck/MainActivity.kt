@@ -44,6 +44,7 @@ class MainActivity : ComponentActivity() {
         AppVisibility.foreground = true
         vm.player.connect()
         vm.resumePendingDownloads()
+        vm.refreshJustUpdated()
         vm.onAppOpened()
         // The installer's "Update?" dialog, if it arrived while Tapedeck was in the background.
         vm.takePendingInstallConfirmation()?.let(::startActivity)

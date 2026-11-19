@@ -113,6 +113,7 @@ import net.devemperor.tapedeck.data.Entry
 import net.devemperor.tapedeck.data.LibrarySort
 import net.devemperor.tapedeck.data.MediaKind
 import net.devemperor.tapedeck.engine.AppInstallState
+import net.devemperor.tapedeck.engine.AppUpdates
 import net.devemperor.tapedeck.engine.Engine
 import net.devemperor.tapedeck.engine.ErrorKind
 import net.devemperor.tapedeck.engine.LiveProgress
@@ -122,7 +123,7 @@ import java.util.concurrent.TimeUnit
 enum class LibraryFilter { ALL, AUDIO, VIDEO, NEW }
 
 @Composable
-fun LibraryScreen(vm: MainViewModel, onOpenPlayer: () -> Unit, onOpenSettings: () -> Unit) {
+fun LibraryScreen(vm: MainViewModel, onOpenPlayer: () -> Unit, onOpenFullscreen: () -> Unit, onOpenSettings: () -> Unit) {
     val entries by vm.entries.collectAsStateWithLifecycle()
     val live by vm.live.collectAsStateWithLifecycle()
     val settings by vm.settings.collectAsStateWithLifecycle()
@@ -168,6 +169,7 @@ fun LibraryScreen(vm: MainViewModel, onOpenPlayer: () -> Unit, onOpenSettings: (
                 )
             }
             item(key = "engine") { EngineBanner(engine) }
+            item(key = "app-updated") { AppUpdatedBanner(vm) }
             item(key = "app-update") { AppUpdateBanner(vm) }
             item(key = "clipboard") { ClipboardBanner(vm) }
             if (downloads.isNotEmpty()) {
@@ -232,7 +234,7 @@ fun LibraryScreen(vm: MainViewModel, onOpenPlayer: () -> Unit, onOpenSettings: (
                 )
             }
             AnimatedVisibility(current != null, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
-                current?.let { MiniPlayer(it, vm, playerState.isPlaying, playerState.durationMs, onOpenPlayer) }
+                current?.let { MiniPlayer(it, vm, playerState.isPlaying, playerState.durationMs, onOpenPlayer, onOpenFullscreen) }
             }
         }
     }
@@ -419,6 +421,42 @@ private fun AppUpdateBanner(vm: MainViewModel) {
     }
 }
 
+/** "Tapedeck 0.4.0 is installed": feedback in the place of the install banner once Android finished. */
+@Composable
+private fun AppUpdatedBanner(vm: MainViewModel) {
+    val version by vm.justUpdated.collectAsStateWithLifecycle()
+    val uriHandler = LocalUriHandler.current
+    var shown by remember { mutableStateOf(version) }
+    if (version != null) shown = version
+    AnimatedVisibility(version != null, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
+        val current = shown ?: return@AnimatedVisibility
+        val onContainer = MaterialTheme.colorScheme.onPrimaryContainer
+        Surface(
+            shape = MaterialTheme.shapes.large,
+            color = MaterialTheme.colorScheme.primaryContainer,
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
+        ) {
+            Column(Modifier.padding(16.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Rounded.CheckCircle, null, tint = onContainer)
+                    Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(stringResource(R.string.app_updated_banner_title, current), style = MaterialTheme.typography.titleSmall, color = onContainer)
+                        Text(stringResource(R.string.app_updated_banner_body), style = MaterialTheme.typography.bodySmall, color = onContainer.copy(alpha = 0.8f))
+                    }
+                }
+                Spacer(Modifier.height(8.dp))
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                    TextButton(onClick = { runCatching { uriHandler.openUri("${AppUpdates.RELEASES_PAGE}/tag/v$current") } }) {
+                        Text(stringResource(R.string.whats_new), color = onContainer)
+                    }
+                    Button(onClick = vm::dismissJustUpdated) { Text(stringResource(R.string.ok)) }
+                }
+            }
+        }
+    }
+}
+
 /** A YouTube link that was copied before Tapedeck was opened: one tap to the download sheet. */
 @Composable
 private fun ClipboardBanner(vm: MainViewModel) {
@@ -427,10 +465,12 @@ private fun ClipboardBanner(vm: MainViewModel) {
     if (offer != null) shown = offer
     AnimatedVisibility(offer != null, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
         val current = shown ?: return@AnimatedVisibility
+        // The whole card opens the download sheet, not only its small button; × still dismisses it.
         Surface(
             shape = MaterialTheme.shapes.large,
             color = MaterialTheme.colorScheme.surfaceContainerHigh,
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)
+                .clip(MaterialTheme.shapes.large).clickable(onClick = vm::acceptClipOffer),
         ) {
             Row(Modifier.padding(start = 12.dp, top = 12.dp, bottom = 12.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                 Box(
@@ -581,9 +621,14 @@ private fun DownloadCard(
 private fun optionsLabel(entry: Entry): String {
     val o = entry.options
     return when (o.kind) {
-        MediaKind.AUDIO -> stringResource(R.string.kind_audio) + " · " + stringResource(audioFormatLabel(o.audioFormat)) +
-            if (o.audioQuality == AudioQuality.SAVER) " · " + stringResource(R.string.quality_saver) else ""
-        MediaKind.VIDEO -> stringResource(R.string.kind_video) + " · ${o.videoHeight}p"
+        MediaKind.AUDIO -> stringResource(R.string.kind_audio) + " · " + (
+            o.customLabel ?: (
+                stringResource(audioFormatLabel(o.audioFormat)) +
+                    if (o.audioQuality == AudioQuality.SAVER) " · " + stringResource(R.string.quality_saver) else ""
+                )
+            )
+        MediaKind.VIDEO -> stringResource(R.string.kind_video) + " · " + stringResource(videoFormatLabel(o.videoFormat)) + " · " +
+            (o.customLabel ?: "${o.videoHeight}p")
     }
 }
 
@@ -595,6 +640,7 @@ fun errorText(kind: String?): Int = when (kind?.let { runCatching { ErrorKind.va
     ErrorKind.MEMBERS_ONLY -> R.string.error_members
     ErrorKind.NOT_YET_LIVE -> R.string.error_not_yet
     ErrorKind.BOT_CHECK -> R.string.error_bot
+    ErrorKind.LOGIN_REQUIRED -> R.string.error_login
     ErrorKind.BLOCKED -> R.string.error_blocked
     ErrorKind.UNSUPPORTED_URL -> R.string.error_unsupported
     ErrorKind.FORMAT -> R.string.error_format
@@ -722,7 +768,7 @@ private fun Badge(text: String, color: Color) {
 }
 
 @Composable
-private fun MiniPlayer(entry: Entry, vm: MainViewModel, isPlaying: Boolean, durationMs: Long, onOpen: () -> Unit) {
+private fun MiniPlayer(entry: Entry, vm: MainViewModel, isPlaying: Boolean, durationMs: Long, onOpen: () -> Unit, onOpenFullscreen: () -> Unit) {
     var position by remember { mutableLongStateOf(vm.player.currentPosition()) }
     LaunchedEffect(isPlaying, entry.id) {
         while (true) {
@@ -738,7 +784,8 @@ private fun MiniPlayer(entry: Entry, vm: MainViewModel, isPlaying: Boolean, dura
         shadowElevation = 12.dp,
         modifier = Modifier.fillMaxWidth(),
     ) {
-        Column(Modifier.clickable(onClick = onOpen)) {
+        // A video opens straight in full screen on a double tap (a single tap then waits a moment for the second).
+        Column(Modifier.combinedClickable(onClick = onOpen, onDoubleClick = if (entry.isVideo) onOpenFullscreen else null)) {
             Row(Modifier.padding(start = 14.dp, end = 6.dp, top = 12.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                 Thumbnail(entry, Modifier.width(72.dp).aspectRatio(16f / 9f), showDuration = false, corner = 9.dp)
                 Spacer(Modifier.width(12.dp))

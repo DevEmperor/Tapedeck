@@ -27,6 +27,7 @@ import androidx.compose.material.icons.automirrored.rounded.OpenInNew
 import androidx.compose.material.icons.rounded.ArrowDropDown
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -57,10 +58,10 @@ import net.devemperor.tapedeck.R
 import net.devemperor.tapedeck.data.AppSettings
 import net.devemperor.tapedeck.data.AudioFormat
 import net.devemperor.tapedeck.data.AudioQuality
-import net.devemperor.tapedeck.data.MediaKind
 import net.devemperor.tapedeck.data.ShareAction
 import net.devemperor.tapedeck.data.Storage
 import net.devemperor.tapedeck.data.UpdateChannel
+import net.devemperor.tapedeck.data.VideoFormat
 
 private const val SOURCE_URL = "https://github.com/DevEmperor/Tapedeck"
 
@@ -98,22 +99,6 @@ fun SettingsScreen(vm: MainViewModel, onBack: () -> Unit) {
                         R.string.setting_share, settings.shareAction,
                         listOf(ShareAction.ASK to R.string.share_ask, ShareAction.DOWNLOAD_NOW to R.string.share_now),
                     ) { value -> vm.updateSettings { it.copy(shareAction = value) } }
-                    ChoiceRow(
-                        R.string.setting_default_kind, defaults.kind,
-                        listOf(MediaKind.AUDIO to R.string.kind_audio, MediaKind.VIDEO to R.string.kind_video),
-                    ) { value -> vm.updateSettings { it.copy(defaults = it.defaults.copy(kind = value)) } }
-                    ChoiceRow(
-                        R.string.option_format, defaults.audioFormat,
-                        AudioFormat.entries.map { it to audioFormatLabel(it) },
-                    ) { value -> vm.updateSettings { it.copy(defaults = it.defaults.copy(audioFormat = value)) } }
-                    ChoiceRow(
-                        R.string.option_quality, defaults.audioQuality,
-                        listOf(AudioQuality.HIGH to R.string.quality_high, AudioQuality.SAVER to R.string.quality_saver),
-                    ) { value -> vm.updateSettings { it.copy(defaults = it.defaults.copy(audioQuality = value)) } }
-                    ChoiceRowText(
-                        R.string.option_resolution, "${defaults.videoHeight}p",
-                        listOf(360, 480, 720, 1080).map { it to "${it}p" }, defaults.videoHeight,
-                    ) { value -> vm.updateSettings { it.copy(defaults = it.defaults.copy(videoHeight = value)) } }
                     SwitchRow(R.string.setting_wifi_only, R.string.setting_wifi_only_sub, settings.wifiOnly) { on -> vm.updateSettings { it.copy(wifiOnly = on) } }
                     WheelRow(
                         title = R.string.setting_parallel,
@@ -128,6 +113,36 @@ fun SettingsScreen(vm: MainViewModel, onBack: () -> Unit) {
                     SwitchRow(R.string.setting_sponsorblock, R.string.setting_sponsorblock_sub, settings.sponsorBlock, last = true) { on ->
                         vm.updateSettings { it.copy(sponsorBlock = on) }
                     }
+                }
+            }
+            // The defaults the download sheet starts with; Audio or Video itself is picked there each time.
+            item {
+                Group(R.string.kind_audio) {
+                    ChoiceRow(
+                        R.string.option_format, defaults.audioFormat,
+                        AudioFormat.entries.map { it to audioFormatLabel(it) },
+                        sub = stringResource(audioHint(defaults.audioFormat, AudioQuality.HIGH)),
+                    ) { value -> vm.updateSettings { it.copy(defaults = it.defaults.copy(audioFormat = value)) } }
+                    ChoiceRow(
+                        R.string.option_quality, defaults.audioQuality,
+                        listOf(AudioQuality.HIGH to R.string.quality_high, AudioQuality.SAVER to R.string.quality_saver),
+                        sub = stringResource(if (defaults.audioQuality == AudioQuality.SAVER) R.string.hint_saver else R.string.hint_high),
+                        last = true,
+                    ) { value -> vm.updateSettings { it.copy(defaults = it.defaults.copy(audioQuality = value)) } }
+                }
+            }
+            item {
+                Group(R.string.kind_video) {
+                    ChoiceRow(
+                        R.string.option_format, defaults.videoFormat,
+                        VideoFormat.entries.map { it to videoFormatLabel(it) },
+                        sub = stringResource(videoHint(defaults.videoFormat)),
+                    ) { value -> vm.updateSettings { it.copy(defaults = it.defaults.copy(videoFormat = value)) } }
+                    ChoiceRowText(
+                        R.string.option_resolution, "${defaults.videoHeight}p",
+                        VIDEO_HEIGHTS.map { it to "${it}p" }, defaults.videoHeight,
+                        sub = stringResource(R.string.resolution_hint), last = true,
+                    ) { value -> vm.updateSettings { it.copy(defaults = it.defaults.copy(videoHeight = value)) } }
                 }
             }
             item {
@@ -175,34 +190,33 @@ fun SettingsScreen(vm: MainViewModel, onBack: () -> Unit) {
                 Group(R.string.group_ytdlp) {
                     val channel = stringResource(if (settings.updateChannel == UpdateChannel.NIGHTLY) R.string.channel_nightly else R.string.channel_stable)
                     val checked = if (meta.lastCheckAt > 0) stringResource(R.string.ytdlp_checked, Format.relative(context, meta.lastCheckAt)) else stringResource(R.string.ytdlp_never_checked)
-                    InfoRow(stringResource(R.string.ytdlp_version), listOfNotNull(version ?: "…", checked, meta.lastError?.let { stringResource(R.string.ytdlp_last_error) }).joinToString(" · "))
+                    ButtonRow(
+                        stringResource(R.string.ytdlp_version),
+                        listOfNotNull(version ?: "…", checked, meta.lastError?.let { stringResource(R.string.ytdlp_last_error) }).joinToString(" · "),
+                        button = stringResource(R.string.ytdlp_update_button),
+                        busy = updating,
+                    ) { vm.updateYtDlp() }
                     ChoiceRow(
                         R.string.setting_channel, settings.updateChannel,
                         listOf(UpdateChannel.NIGHTLY to R.string.channel_nightly_long, UpdateChannel.STABLE to R.string.channel_stable),
                         currentLabel = channel,
                     ) { value -> vm.updateSettings { it.copy(updateChannel = value) } }
                     SwitchRow(R.string.setting_auto_update, R.string.setting_auto_update_sub, settings.autoUpdate) { on -> vm.updateSettings { it.copy(autoUpdate = on) } }
-                    SwitchRow(R.string.setting_fast_js, R.string.setting_fast_js_sub, settings.fastJsEngine) { on -> vm.updateSettings { it.copy(fastJsEngine = on) } }
-                    ActionRow(
-                        stringResource(R.string.ytdlp_update_now), stringResource(R.string.ytdlp_update_now_sub), last = true,
-                        trailing = { if (updating) CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp) },
-                    ) { vm.updateYtDlp() }
+                    SwitchRow(R.string.setting_fast_js, R.string.setting_fast_js_sub, settings.fastJsEngine, last = true) { on -> vm.updateSettings { it.copy(fastJsEngine = on) } }
                 }
             }
             item {
                 Group(R.string.group_about) {
                     val newer = appUpdate?.version
-                    InfoRow(
+                    ButtonRow(
                         stringResource(R.string.app_name),
                         if (newer != null) stringResource(R.string.app_version_available, BuildConfig.VERSION_NAME, newer) else BuildConfig.VERSION_NAME,
-                    )
+                        button = stringResource(R.string.app_check_button),
+                        busy = checkingApp,
+                    ) { vm.checkAppUpdateNow() }
                     SwitchRow(R.string.setting_check_app_updates, R.string.setting_check_app_updates_sub, settings.checkAppUpdates) { on ->
                         vm.updateSettings { it.copy(checkAppUpdates = on) }
                     }
-                    ActionRow(
-                        stringResource(R.string.app_check_now), null,
-                        trailing = { if (checkingApp) CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp) },
-                    ) { vm.checkAppUpdateNow() }
                     ActionRow(stringResource(R.string.source_code), SOURCE_URL.removePrefix("https://"), trailing = {
                         Icon(Icons.AutoMirrored.Rounded.OpenInNew, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
                     }) { runCatching { uriHandler.openUri(SOURCE_URL) } }
@@ -268,6 +282,27 @@ private fun InfoRow(title: String, value: String, last: Boolean = false) {
     RowBase(onClick = null, last = last) { TitleAndSub(title, value, modifier = Modifier.weight(1f)) }
 }
 
+/** A value with its action right beside it: "yt-dlp 2026.11.18 … [Update]". */
+@Composable
+private fun ButtonRow(title: String, value: String, button: String, busy: Boolean, last: Boolean = false, onClick: () -> Unit) {
+    RowBase(onClick = null, last = last) {
+        TitleAndSub(title, value, modifier = Modifier.weight(1f))
+        Spacer(Modifier.width(12.dp))
+        FilledTonalButton(
+            onClick = onClick,
+            enabled = !busy,
+            contentPadding = PaddingValues(horizontal = 14.dp),
+            modifier = Modifier.height(36.dp),
+        ) {
+            if (busy) {
+                CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
+                Spacer(Modifier.width(8.dp))
+            }
+            Text(button, style = MaterialTheme.typography.labelLarge)
+        }
+    }
+}
+
 @Composable
 private fun ActionRow(title: String, sub: String?, last: Boolean = false, trailing: @Composable () -> Unit = {}, onClick: () -> Unit) {
     RowBase(onClick = onClick, last = last) {
@@ -277,16 +312,39 @@ private fun ActionRow(title: String, sub: String?, last: Boolean = false, traili
 }
 
 @Composable
-private fun <T> ChoiceRow(title: Int, current: T, options: List<Pair<T, Int>>, currentLabel: String? = null, last: Boolean = false, onPick: (T) -> Unit) {
+private fun <T> ChoiceRow(
+    title: Int,
+    current: T,
+    options: List<Pair<T, Int>>,
+    currentLabel: String? = null,
+    sub: String? = null,
+    last: Boolean = false,
+    onPick: (T) -> Unit,
+) {
     val labels = options.map { (value, label) -> value to stringResource(label) }
-    ChoiceRowText(title, currentLabel ?: labels.firstOrNull { it.first == current }?.second.orEmpty(), labels, current, last, onPick)
+    ChoiceRowText(title, currentLabel ?: labels.firstOrNull { it.first == current }?.second.orEmpty(), labels, current, sub, last, onPick)
 }
 
+/** The value sits in a chip on the right, like [WheelRow]; [sub] explains the current choice. */
 @Composable
-private fun <T> ChoiceRowText(title: Int, currentLabel: String, options: List<Pair<T, String>>, current: T, last: Boolean = false, onPick: (T) -> Unit) {
+private fun <T> ChoiceRowText(
+    title: Int,
+    currentLabel: String,
+    options: List<Pair<T, String>>,
+    current: T,
+    sub: String? = null,
+    last: Boolean = false,
+    onPick: (T) -> Unit,
+) {
     var open by remember { mutableStateOf(false) }
     RowBase(onClick = { open = true }, last = last) {
-        TitleAndSub(stringResource(title), currentLabel, modifier = Modifier.weight(1f))
+        if (sub == null) {
+            TitleAndSub(stringResource(title), currentLabel, modifier = Modifier.weight(1f))
+        } else {
+            TitleAndSub(stringResource(title), sub, modifier = Modifier.weight(1f))
+            Spacer(Modifier.width(12.dp))
+            ValueChip(currentLabel) { open = true }
+        }
     }
     if (open) {
         AlertDialog(
@@ -314,6 +372,22 @@ private fun <T> ChoiceRowText(title: Int, currentLabel: String, options: List<Pa
     }
 }
 
+/** "[7 days ▾]": the current value of a setting, on the right of its row. */
+@Composable
+private fun ValueChip(text: String, enabled: Boolean = true, onClick: () -> Unit) {
+    val container = if (enabled) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerHighest
+    val content = if (enabled) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+    Row(
+        Modifier.clip(MaterialTheme.shapes.small).background(container)
+            .clickable(enabled = enabled, onClick = onClick)
+            .padding(start = 14.dp, end = 6.dp, top = 8.dp, bottom = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(text, style = MaterialTheme.typography.labelLarge, color = content)
+        Icon(Icons.Rounded.ArrowDropDown, null, tint = content)
+    }
+}
+
 /** A setting whose value sits in a chip on the right ("[7 days ▾]") and is chosen on a [WheelPicker]. */
 @Composable
 private fun <T> WheelRow(
@@ -330,17 +404,7 @@ private fun <T> WheelRow(
     RowBase(onClick = { open = true }, last = last, enabled = enabled) {
         TitleAndSub(stringResource(title), sub, enabled, Modifier.weight(1f))
         Spacer(Modifier.width(12.dp))
-        val container = if (enabled) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerHighest
-        val content = if (enabled) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
-        Row(
-            Modifier.clip(MaterialTheme.shapes.small).background(container)
-                .clickable(enabled = enabled) { open = true }
-                .padding(start = 14.dp, end = 6.dp, top = 8.dp, bottom = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(label(current), style = MaterialTheme.typography.labelLarge, color = content)
-            Icon(Icons.Rounded.ArrowDropDown, null, tint = content)
-        }
+        ValueChip(label(current), enabled) { open = true }
     }
     if (open) {
         WheelPickerDialog(

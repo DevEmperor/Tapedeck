@@ -9,8 +9,33 @@ object Links {
     private val youtubeHosts = setOf("youtube.com", "www.youtube.com", "m.youtube.com", "music.youtube.com", "youtu.be", "www.youtu.be", "youtube-nocookie.com", "www.youtube-nocookie.com")
     private val idPattern = Regex("^[A-Za-z0-9_-]{11}$")
 
-    // Share links carry tracking parameters (si, pp, feature) that change nothing about the video.
-    private val trackingParams = setOf("si", "pp", "feature", "fbclid", "gclid", "ab_channel")
+    // Share links carry tracking parameters (si, pp, feature) that change nothing about the video:
+    // YouTube, Instagram (igsh), Facebook (mibextid, rdid), TikTok (_r, _t, is_from_webapp …), Reddit
+    // (share_id), X (ref_src) and Bilibili (vd_source, spm_id_from, share_*).
+    private val trackingParams = setOf(
+        "si", "pp", "feature", "fbclid", "gclid", "ab_channel",
+        "igsh", "igshid", "ig_rid", "ig_mid", "mibextid", "rdid",
+        "_r", "_t", "is_from_webapp", "sender_device", "is_copy_url", "web_id",
+        "share_id", "ref_src", "ref_url",
+        "vd_source", "spm_id_from", "share_source", "share_medium", "share_plat", "share_session_id", "share_tag", "unique_k",
+    )
+
+    // On X a share link ends in ?s=20&t=…; there "t" is no timestamp but a tracking token.
+    private val xHosts = setOf("x.com", "twitter.com", "mobile.twitter.com", "mobile.x.com")
+
+    /**
+     * Well-known sites yt-dlp downloads from. Any link can be downloaded; a copied one of these is also
+     * offered at the top of the library (everything else would be every link anybody ever copies).
+     */
+    private val knownSites = setOf(
+        "youtube.com", "youtu.be", "youtube-nocookie.com",
+        "instagram.com", "tiktok.com", "x.com", "twitter.com", "facebook.com", "fb.watch", "threads.net", "threads.com", "bsky.app",
+        "vimeo.com", "dailymotion.com", "dai.ly", "twitch.tv", "reddit.com", "redd.it", "streamable.com", "rumble.com", "kick.com",
+        "soundcloud.com", "bandcamp.com", "mixcloud.com", "audiomack.com",
+        "ardmediathek.de", "zdf.de", "arte.tv", "3sat.de", "tagesschau.de", "br.de", "wdr.de", "ndr.de", "swr.de", "srf.ch", "orf.at",
+        "ted.com", "archive.org", "bilibili.com", "b23.tv", "nicovideo.jp", "odysee.com", "pinterest.com", "pin.it", "tumblr.com",
+        "imgur.com", "9gag.com", "linkedin.com", "loom.com",
+    )
 
     /** The first http(s) link in [text], e.g. "Look at this https://youtu.be/xyz?si=abc". */
     fun extractUrl(text: String?): String? {
@@ -19,6 +44,15 @@ object Links {
     }
 
     fun isYoutube(url: String): Boolean = host(url)?.let { it in youtubeHosts } == true
+
+    /** YouTube, Instagram, TikTok, Vimeo, the Mediatheken …, also with subdomains (m., www., vm., on.). */
+    fun isKnownSite(url: String): Boolean {
+        val host = host(url) ?: return false
+        return knownSites.any { host == it || host.endsWith(".$it") }
+    }
+
+    /** "instagram.com" for https://www.instagram.com/reel/…, to say where a link leads. */
+    fun siteName(url: String): String? = host(url)?.removePrefix("www.")?.removePrefix("m.")
 
     fun videoId(url: String): String? {
         val uri = parse(url) ?: return null
@@ -71,9 +105,10 @@ object Links {
     fun thumbnailFor(url: String): String? = videoId(url)?.let { "https://i.ytimg.com/vi/$it/hqdefault.jpg" }
 
     private fun stripTracking(uri: URI): String? {
+        val onX = uri.host?.lowercase() in xHosts
         val kept = uri.rawQuery?.split('&')?.filter { part ->
             val key = part.substringBefore('=')
-            key !in trackingParams && !key.startsWith("utm_")
+            key.isNotEmpty() && key !in trackingParams && !key.startsWith("utm_") && !(onX && (key == "s" || key == "t"))
         }
         return try {
             URI(uri.scheme, uri.rawAuthority, uri.rawPath, null, null).toString()

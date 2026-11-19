@@ -6,6 +6,7 @@ import com.yausername.ffmpeg.FFmpeg
 import com.yausername.youtubedl_android.YoutubeDL
 import com.yausername.youtubedl_android.YoutubeDLRequest
 import com.yausername.youtubedl_android.YoutubeDLResponse
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -196,6 +197,27 @@ object Engine {
             .addCommands(YtDlpArgs.playlist())
         val response = withYtDlp { YoutubeDL.execute(request) }
         return InfoJson.parsePlaylist(response.out)
+    }
+
+    /**
+     * Title, picture and every format of one video (`yt-dlp -J`), for the format list and for the preview
+     * of sites without a quick oEmbed. YouTube needs its JavaScript challenge solved for this too.
+     */
+    suspend fun inspect(context: Context, url: String, settings: Settings): MediaDetails {
+        ensureInitialized(context)
+        val request = YoutubeDLRequest(url)
+            .addOption("--cache-dir", cacheDir(context).absolutePath)
+            .addCommands(YtDlpArgs.inspect())
+        jsEngine(context, settings)?.let { request.addCommands(listOf("--js-runtimes", "quickjs:${it.absolutePath}")) }
+        val processId = "inspect#${System.nanoTime()}"
+        try {
+            val response = withYtDlp { YoutubeDL.execute(request, processId) }
+            return withContext(Dispatchers.Default) { Formats.parse(response.out) }
+        } catch (e: CancellationException) {
+            // The sheet was closed or the link changed: no need to let yt-dlp finish.
+            YoutubeDL.destroyProcessById(processId)
+            throw e
+        }
     }
 
     /**

@@ -8,6 +8,7 @@ enum class ErrorKind {
     MEMBERS_ONLY,
     NOT_YET_LIVE,
     BOT_CHECK,
+    LOGIN_REQUIRED,
     BLOCKED,
     UNSUPPORTED_URL,
     FORMAT,
@@ -40,6 +41,10 @@ object Errors {
             "members-only" in lower || "join this channel" in lower || "members only" in lower -> ErrorKind.MEMBERS_ONLY
             "premieres in" in lower || "live event will begin" in lower || "is upcoming" in lower -> ErrorKind.NOT_YET_LIVE
             "not a bot" in lower || "sign in to confirm" in lower -> ErrorKind.BOT_CHECK
+            // Instagram, Facebook, X & Co. for anything not public; after the YouTube cases, whose messages
+            // also point to --cookies.
+            "login required" in lower || "log in" in lower || "logged-in" in lower || "logged in" in lower ||
+                "use --cookies" in lower || "--cookies-from-browser" in lower || "authentication" in lower -> ErrorKind.LOGIN_REQUIRED
             // Before UNAVAILABLE, whose "is not available" would match it too.
             "requested format is not available" in lower || "no video formats found" in lower -> ErrorKind.FORMAT
             "video unavailable" in lower || "is not available" in lower || "has been removed" in lower ||
