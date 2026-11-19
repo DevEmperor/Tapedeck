@@ -26,8 +26,9 @@ data class AppSettings(
     val wifiOnly: Boolean = false,
     val parallelDownloads: Int = 2,
     val sponsorBlock: Boolean = false,
-    /** 0 switches the automatic clean-up off. */
-    val autoDeleteDays: Int = 0,
+    val autoDeleteEnabled: Boolean = false,
+    /** 1–90, chosen with the spinner; kept while the clean-up is switched off. */
+    val autoDeleteDays: Int = 7,
     val autoDeleteOnlyFinished: Boolean = true,
     val autoPlayNext: Boolean = true,
     val resumeRewindSec: Int = 5,
@@ -42,8 +43,16 @@ data class AppSettings(
     // Nightly is what yt-dlp itself recommends for regular users: YouTube fixes land there days
     // before a stable release.
     val updateChannel: UpdateChannel = UpdateChannel.NIGHTLY,
+    /** Checked whenever the app is opened, never in the background. */
     val autoUpdate: Boolean = true,
-)
+) {
+    val autoDeleteAfterDays: Int get() = autoDeleteDays.coerceIn(AUTO_DELETE_MIN_DAYS, AUTO_DELETE_MAX_DAYS)
+
+    companion object {
+        const val AUTO_DELETE_MIN_DAYS = 1
+        const val AUTO_DELETE_MAX_DAYS = 90
+    }
+}
 
 /** Bookkeeping of the yt-dlp updater, kept apart from what the user sets. */
 @Serializable

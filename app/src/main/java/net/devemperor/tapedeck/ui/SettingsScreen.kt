@@ -1,9 +1,9 @@
 package net.devemperor.tapedeck.ui
 
-import android.content.Context
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -15,17 +15,23 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.OpenInNew
+import androidx.compose.material.icons.rounded.ArrowDropDown
+import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -36,22 +42,29 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.flow.first
 import net.devemperor.tapedeck.BuildConfig
 import net.devemperor.tapedeck.Format
 import net.devemperor.tapedeck.R
+import net.devemperor.tapedeck.data.AppSettings
 import net.devemperor.tapedeck.data.AudioFormat
 import net.devemperor.tapedeck.data.AudioQuality
 import net.devemperor.tapedeck.data.MediaKind
@@ -139,14 +152,17 @@ fun SettingsScreen(vm: MainViewModel, onBack: () -> Unit) {
                         stringResource(R.string.storage_used),
                         stringResource(R.string.storage_used_value, Format.bytes(context, used), pluralStringResource(R.plurals.entries, count, count), Format.bytes(context, Storage.freeBytes(context))),
                     )
-                    val dayOptions = listOf(0, 1, 3, 7, 14, 30)
-                    ChoiceRowText(
-                        R.string.setting_auto_delete, autoDeleteLabel(settings.autoDeleteDays),
-                        dayOptions.map { it to autoDeleteLabelText(context, it) }, settings.autoDeleteDays,
+                    SwitchRow(R.string.setting_auto_delete, R.string.setting_auto_delete_sub, settings.autoDeleteEnabled) { on ->
+                        vm.updateSettings { it.copy(autoDeleteEnabled = on) }
+                    }
+                    DaysSpinnerRow(
+                        days = settings.autoDeleteAfterDays,
+                        sub = stringResource(if (settings.autoDeleteOnlyFinished) R.string.delete_after_from_finished else R.string.delete_after_from_download),
+                        enabled = settings.autoDeleteEnabled,
                     ) { value -> vm.updateSettings { it.copy(autoDeleteDays = value) } }
                     SwitchRow(
                         R.string.setting_only_finished, R.string.setting_only_finished_sub, settings.autoDeleteOnlyFinished,
-                        enabled = settings.autoDeleteDays > 0,
+                        enabled = settings.autoDeleteEnabled,
                     ) { on -> vm.updateSettings { it.copy(autoDeleteOnlyFinished = on) } }
                     ActionRow(stringResource(R.string.delete_finished_now), stringResource(R.string.delete_finished_now_sub), last = true) { vm.deleteFinished() }
                 }
@@ -282,8 +298,57 @@ private fun <T> ChoiceRowText(title: Int, currentLabel: String, options: List<Pa
     }
 }
 
+/** "Delete after [7 days ▾]": a spinner over 1–90 days that opens scrolled to the current value. */
 @Composable
-private fun autoDeleteLabel(days: Int): String = autoDeleteLabelText(LocalContext.current, days)
-
-private fun autoDeleteLabelText(context: Context, days: Int): String =
-    if (days <= 0) context.getString(R.string.auto_delete_never) else context.resources.getQuantityString(R.plurals.after_days, days, days)
+private fun DaysSpinnerRow(days: Int, sub: String, enabled: Boolean, onPick: (Int) -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    RowBase(onClick = { open = true }, last = false, enabled = enabled) {
+        TitleAndSub(stringResource(R.string.setting_delete_after), sub, enabled, Modifier.weight(1f))
+        Spacer(Modifier.width(12.dp))
+        Box {
+            val container = if (enabled) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerHighest
+            val content = if (enabled) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+            Row(
+                Modifier.clip(MaterialTheme.shapes.small).background(container)
+                    .clickable(enabled = enabled) { open = true }
+                    .padding(start = 14.dp, end = 6.dp, top = 8.dp, bottom = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(pluralStringResource(R.plurals.days_after, days, days), style = MaterialTheme.typography.labelLarge, color = content)
+                Icon(Icons.Rounded.ArrowDropDown, null, tint = content)
+            }
+            val scroll = rememberScrollState()
+            val itemPx = with(LocalDensity.current) { 48.dp.roundToPx() }
+            LaunchedEffect(open) {
+                if (!open) return@LaunchedEffect
+                // The menu is measured a frame after it opens; scroll once it can, with two values above the current one.
+                snapshotFlow { scroll.maxValue }.first { it in 1..<Int.MAX_VALUE }
+                scroll.scrollTo((days - 3).coerceAtLeast(0) * itemPx)
+            }
+            DropdownMenu(
+                expanded = open,
+                onDismissRequest = { open = false },
+                scrollState = scroll,
+                modifier = Modifier.heightIn(max = 336.dp),
+            ) {
+                (AppSettings.AUTO_DELETE_MIN_DAYS..AppSettings.AUTO_DELETE_MAX_DAYS).forEach { value ->
+                    val selected = value == days
+                    DropdownMenuItem(
+                        text = {
+                            Text(
+                                pluralStringResource(R.plurals.days_after, value, value),
+                                color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                                fontWeight = if (selected) FontWeight.SemiBold else null,
+                            )
+                        },
+                        trailingIcon = { if (selected) Icon(Icons.Rounded.Check, null, tint = MaterialTheme.colorScheme.primary) },
+                        onClick = {
+                            onPick(value)
+                            open = false
+                        },
+                    )
+                }
+            }
+        }
+    }
+}

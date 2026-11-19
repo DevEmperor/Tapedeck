@@ -94,13 +94,18 @@ class EngineLogicTest {
         val playing = entry("d", completedAt = now - 10 * day, finished = true, finishedAt = now - 9 * day)
         val all = listOf(heard, unheard, kept, playing)
 
-        val onlyHeard = AppSettings(autoDeleteDays = 3, autoDeleteOnlyFinished = true)
+        val onlyHeard = AppSettings(autoDeleteEnabled = true, autoDeleteDays = 3, autoDeleteOnlyFinished = true)
         assertEquals(listOf("a"), AutoDelete.victims(all, onlyHeard, now, playingId = "d").map { it.id })
 
-        val everything = AppSettings(autoDeleteDays = 7, autoDeleteOnlyFinished = false)
+        val everything = AppSettings(autoDeleteEnabled = true, autoDeleteDays = 7, autoDeleteOnlyFinished = false)
         assertEquals(listOf("a", "b", "d"), AutoDelete.victims(all, everything, now, playingId = null).map { it.id })
 
-        assertNull(AutoDelete.dueAt(heard, AppSettings(autoDeleteDays = 0)))
+        // Switched off, nothing is due; the spinner's value only counts while it is on.
+        assertNull(AutoDelete.dueAt(heard, AppSettings(autoDeleteEnabled = false, autoDeleteDays = 1)))
+        // Out-of-range values (an old "0 = off") are clamped to the spinner's 1–90.
+        val finishedAt = checkNotNull(heard.finishedAt)
+        assertEquals(finishedAt + day, AutoDelete.dueAt(heard, AppSettings(autoDeleteEnabled = true, autoDeleteDays = 0)))
+        assertEquals(finishedAt + 90 * day, AutoDelete.dueAt(heard, AppSettings(autoDeleteEnabled = true, autoDeleteDays = 400)))
     }
 
     private fun entry(id: String, completedAt: Long, finished: Boolean = false, finishedAt: Long? = null, keep: Boolean = false) = Entry(

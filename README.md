@@ -20,8 +20,8 @@ Share a video from the YouTube app → Tapedeck → *Download*. That's it.
 
 **yt-dlp that keeps working**
 - [yt-dlp](https://github.com/yt-dlp/yt-dlp) with its own Python, FFmpeg and QuickJS (the JavaScript runtime yt-dlp needs for YouTube since 2025.11), via [youtubedl-android](https://github.com/yausername/youtubedl-android)
-- Updated in the background twice a day from GitHub, nightly channel by default (YouTube fixes land there first)
-- When a download fails in a way an update may fix, Tapedeck fetches the newest yt-dlp and retries once on its own
+- Checked for updates on GitHub whenever you open Tapedeck (at most once an hour), never in the background; nightly channel by default (YouTube fixes land there first)
+- When a download fails in a way an update may fix, Tapedeck retries it once, and fetches the newest yt-dlp first if the app is open
 
 **Listening in the car**
 - Plays with the screen off and survives the app being closed
@@ -37,7 +37,7 @@ Share a video from the YouTube app → Tapedeck → *Download*. That's it.
 **Keeping the phone tidy**
 - Library with search, filters (audio / video / new) and sorting
 - Delete with undo, *keep* to protect a download, *delete everything heard*
-- **Automatic clean-up** after 1–30 days, counted from the download or from the moment you heard it to the end
+- **Automatic clean-up** after 1–90 days, counted from the download or from the moment you heard it to the end
 - Save a file to `Download/Tapedeck` (e.g. for a USB stick) or share it
 
 ## Install

@@ -29,7 +29,7 @@
         <item quantity="one">Deleted in %d day</item>
         <item quantity="other">Deleted in %d days</item>
     </plurals>
-    <string name="engine_updating">Updating yt-dlp in the background…</string>
+    <string name="engine_updating">Updating yt-dlp…</string>
     <string name="engine_failed">yt-dlp could not be started. Reinstalling Tapedeck usually helps.</string>
 
     <!-- Download states -->
@@ -164,10 +164,13 @@
         <item quantity="other">%d downloads</item>
     </plurals>
     <string name="setting_auto_delete">Delete automatically</string>
-    <string name="auto_delete_never">Never</string>
-    <plurals name="after_days">
-        <item quantity="one">After %d day</item>
-        <item quantity="other">After %d days</item>
+    <string name="setting_auto_delete_sub">Removes downloads after the time set below</string>
+    <string name="setting_delete_after">Delete after</string>
+    <string name="delete_after_from_download">Counted from the download</string>
+    <string name="delete_after_from_finished">Counted from the end of listening</string>
+    <plurals name="days_after">
+        <item quantity="one">%d day</item>
+        <item quantity="other">%d days</item>
     </plurals>
     <string name="setting_only_finished">Only what was heard to the end</string>
     <string name="setting_only_finished_sub">Counts from the moment it was finished. Kept downloads are never deleted.</string>
@@ -182,7 +185,7 @@
     <string name="channel_nightly_long">Nightly (recommended, fixes arrive first)</string>
     <string name="channel_stable">Stable</string>
     <string name="setting_auto_update">Update automatically</string>
-    <string name="setting_auto_update_sub">Checks twice a day in the background and retries a failed download once after an update</string>
+    <string name="setting_auto_update_sub">Checks when you open Tapedeck (at most once an hour), never in the background, and retries a failed download once after an update</string>
     <string name="ytdlp_update_now">Update now</string>
     <string name="ytdlp_update_now_sub">Fetches the newest yt-dlp from GitHub</string>
     <string name="ytdlp_updated">yt-dlp updated to %s</string>

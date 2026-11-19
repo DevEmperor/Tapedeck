@@ -41,12 +41,17 @@ class MainActivity : ComponentActivity() {
 
     override fun onStart() {
         super.onStart()
+        AppVisibility.foreground = true
         vm.player.connect()
         vm.resumePendingDownloads()
+        vm.onAppOpened()
     }
 
     override fun onStop() {
-        if (!isChangingConfigurations) vm.player.disconnect()
+        if (!isChangingConfigurations) {
+            AppVisibility.foreground = false
+            vm.player.disconnect()
+        }
         super.onStop()
     }
 

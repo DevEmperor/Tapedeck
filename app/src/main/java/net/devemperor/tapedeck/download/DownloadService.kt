@@ -27,6 +27,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import net.devemperor.tapedeck.AppVisibility
 import net.devemperor.tapedeck.BuildConfig
 import net.devemperor.tapedeck.Format
 import net.devemperor.tapedeck.MainActivity
@@ -153,8 +154,9 @@ class DownloadService : LifecycleService() {
         val tracker = ProgressTracker(entry.options.kind)
         app.downloads.publish(id, tracker.current)
         try {
-            // The bundled yt-dlp is a year old by now; fetch a current one before the very first download.
-            if (Engine.neverUpdated(app)) Engine.update(app, app.settings)
+            // The bundled yt-dlp is a year old by now; fetch a current one before the very first download
+            // (if opening the app could not, e.g. offline) — but only while the app is on screen.
+            if (Engine.neverUpdated(app) && AppVisibility.foreground) Engine.update(app, app.settings)
             if (Storage.freeBytes(app) < MIN_FREE_BYTES) throw StorageFullException()
             Engine.download(app, entry, app.settings.current.sponsorBlock) { line ->
                 if (BuildConfig.DEBUG) Log.d(TAG, "${id.take(8)} $line")
@@ -238,10 +240,11 @@ class DownloadService : LifecycleService() {
             error.kind == ErrorKind.NETWORK && !networkOk ->
                 app.library.update(id) { it.copy(state = DownloadState.WAITING_NETWORK) }
             // A passing 403, or YouTube changed something: back into the queue for one more try, and
-            // fetch the newest yt-dlp meanwhile. The retry waits for that update by itself (Engine gate).
+            // fetch the newest yt-dlp meanwhile if the app is open (never in the background). The retry
+            // waits for that update by itself (Engine gate).
             error.mayBeFixedByUpdate && entry.autoRetries == 0 -> {
                 app.library.update(id) { it.copy(state = DownloadState.QUEUED, autoRetries = it.autoRetries + 1) }
-                if (settings.autoUpdate && Engine.isRetryUpdateWorthwhile(app.settings)) {
+                if (settings.autoUpdate && AppVisibility.foreground && Engine.isRetryUpdateWorthwhile(app.settings)) {
                     app.scope.launch { Engine.update(app, app.settings) }
                 }
             }

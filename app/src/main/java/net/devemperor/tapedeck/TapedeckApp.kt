@@ -20,6 +20,12 @@ import okhttp3.OkHttpClient
 import java.io.File
 import java.util.concurrent.TimeUnit
 
+/** Whether the activity is on screen; yt-dlp updates are only allowed then. */
+object AppVisibility {
+    @Volatile
+    var foreground = false
+}
+
 class TapedeckApp : Application(), SingletonImageLoader.Factory {
     val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
@@ -50,8 +56,9 @@ class TapedeckApp : Application(), SingletonImageLoader.Factory {
         preview = Preview(http)
         Notifications.createChannels(this)
         Maintenance.schedule(this)
+        // Unpacking Python and FFmpeg only; updates happen when the activity opens (MainViewModel.onAppOpened).
         scope.launch(Dispatchers.IO) {
-            Engine.prepare(this@TapedeckApp, settings)
+            runCatching { Engine.ensureInitialized(this@TapedeckApp) }
         }
         scope.launch(Dispatchers.IO) { Maintenance.cleanUp(this@TapedeckApp) }
     }

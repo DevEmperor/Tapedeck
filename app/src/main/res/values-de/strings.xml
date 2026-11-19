@@ -28,7 +28,7 @@
         <item quantity="one">Wird in %d Tag gelöscht</item>
         <item quantity="other">Wird in %d Tagen gelöscht</item>
     </plurals>
-    <string name="engine_updating">yt-dlp wird im Hintergrund aktualisiert…</string>
+    <string name="engine_updating">yt-dlp wird aktualisiert…</string>
     <string name="engine_failed">yt-dlp konnte nicht starten. Meist hilft es, Tapedeck neu zu installieren.</string>
 
     <!-- Download states -->
@@ -163,10 +163,13 @@
         <item quantity="other">%d Downloads</item>
     </plurals>
     <string name="setting_auto_delete">Automatisch löschen</string>
-    <string name="auto_delete_never">Nie</string>
-    <plurals name="after_days">
-        <item quantity="one">Nach %d Tag</item>
-        <item quantity="other">Nach %d Tagen</item>
+    <string name="setting_auto_delete_sub">Entfernt Downloads nach der unten eingestellten Zeit</string>
+    <string name="setting_delete_after">Löschen nach</string>
+    <string name="delete_after_from_download">Gezählt ab dem Download</string>
+    <string name="delete_after_from_finished">Gezählt ab dem Ende des Hörens</string>
+    <plurals name="days_after">
+        <item quantity="one">%d Tag</item>
+        <item quantity="other">%d Tagen</item>
     </plurals>
     <string name="setting_only_finished">Nur zu Ende Gehörtes</string>
     <string name="setting_only_finished_sub">Zählt ab dem Moment, in dem es zu Ende gehört wurde. Behaltene Downloads werden nie gelöscht.</string>
@@ -181,7 +184,7 @@
     <string name="channel_nightly_long">Nightly (empfohlen, Korrekturen kommen zuerst)</string>
     <string name="channel_stable">Stabil</string>
     <string name="setting_auto_update">Automatisch aktualisieren</string>
-    <string name="setting_auto_update_sub">Prüft zweimal am Tag im Hintergrund und wiederholt einen fehlgeschlagenen Download nach einem Update einmal</string>
+    <string name="setting_auto_update_sub">Prüft beim Öffnen von Tapedeck (höchstens einmal pro Stunde), nie im Hintergrund, und wiederholt einen fehlgeschlagenen Download nach einem Update einmal</string>
     <string name="ytdlp_update_now">Jetzt aktualisieren</string>
     <string name="ytdlp_update_now_sub">Holt das neueste yt-dlp von GitHub</string>
     <string name="ytdlp_updated">yt-dlp auf %s aktualisiert</string>

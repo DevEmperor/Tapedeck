@@ -26,8 +26,8 @@ import kotlin.time.Duration.Companion.minutes
 
 /**
  * yt-dlp with its own Python, FFmpeg and QuickJS (youtubedl-android). YouTube changes its player every
- * few weeks, so the yt-dlp script is replaced from GitHub in the background; Python and FFmpeg stay as
- * shipped in the APK.
+ * few weeks, so the yt-dlp script is replaced from GitHub whenever the app is opened and a check is due;
+ * Python and FFmpeg stay as shipped in the APK.
  */
 object Engine {
     sealed interface Status {
@@ -47,7 +47,7 @@ object Engine {
     const val BUNDLED_VERSION = "2025.11.12"
 
     private const val TAG = "TapedeckEngine"
-    private val CHECK_INTERVAL = 12.hours
+    private val CHECK_INTERVAL = 1.hours
     private val RETRY_CHECK_INTERVAL = 30.minutes
 
     private val _status = MutableStateFlow<Status>(Status.Starting)
@@ -88,15 +88,18 @@ object Engine {
         }
     }
 
-    /** At app start: unpack once, and bring yt-dlp up to date if a check is due. */
-    suspend fun prepare(context: Context, settings: Settings) {
+    /**
+     * Called when Tapedeck comes to the foreground. yt-dlp is only ever updated while the app is open,
+     * never from a background job: the very first open replaces the year-old bundled version, after
+     * that it checks at most once an hour.
+     */
+    suspend fun updateIfDue(context: Context, settings: Settings) {
         try {
             ensureInitialized(context)
         } catch (e: Exception) {
             return
         }
-        val current = settings.current
-        if (neverUpdated(context) || (current.autoUpdate && isCheckDue(settings))) {
+        if (neverUpdated(context) || (settings.current.autoUpdate && isCheckDue(settings))) {
             update(context, settings)
         }
     }

@@ -246,6 +246,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun resumePendingDownloads() = app.downloads.resumePending()
 
+    /** The only place a regular yt-dlp update starts. In the app scope, so leaving the app mid-update does not cut it off. */
+    fun onAppOpened() {
+        app.scope.launch { Engine.updateIfDue(app, app.settings) }
+    }
+
     private fun message(render: (Context) -> String) {
         _events.tryEmit(UiEvent.Message(render))
     }
