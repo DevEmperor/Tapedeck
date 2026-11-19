@@ -77,7 +77,7 @@ stopped.
   </tr>
   <tr>
     <td align="center"><img src="docs/images/mixtape.png" width="190" alt="The mixtape Road trip: a teal cassette, Play and Shuffle, and its three films in order with drag handles; the first one is playing"></td>
-    <td align="center"><img src="docs/images/mixtape-add.png" width="190" alt="Putting a download on mixtapes: tick boxes for Blender Open Movies and Road trip, or start a new mixtape"></td>
+    <td align="center"><img src="docs/images/mixtape-drag.png" width="190" alt="Dragging Sintel onto a mixtape: the shelf has come into view, Blender Open Movies waits with a dashed ring, Road trip under the finger has grown with a solid ring, and New mixtape waits in the shelf's head"></td>
     <td align="center"><img src="docs/images/playback.png" width="190" alt="The playback menu in the player: speed from 0.75× to 2×, repeat off, all or this one, shuffle and skip silence"></td>
     <td align="center"><img src="docs/images/deck.png" width="190" alt="Audio as a cassette in a tape deck: the label shows the title, a tape counter at 1:49, the play light on, and the background tinted in the mixtape's colour"></td>
   </tr>
