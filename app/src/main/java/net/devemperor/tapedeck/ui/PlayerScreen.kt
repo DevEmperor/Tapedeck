@@ -252,9 +252,7 @@ fun PlayerScreen(vm: MainViewModel, startFullscreen: Boolean = false, onClose: (
 
             Column(Modifier.fillMaxWidth()) {
                 Text(entry.title, style = MaterialTheme.typography.titleLarge, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                entry.uploader?.let {
-                    Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
-                }
+                SourceLine(entry.url, entry.uploader, MaterialTheme.typography.bodyMedium, MaterialTheme.colorScheme.onSurfaceVariant)
             }
             Spacer(Modifier.height(18.dp))
 
@@ -533,7 +531,8 @@ private fun FullscreenVideo(vm: MainViewModel, controller: Player?, entry: Entry
                     Spacer(Modifier.width(8.dp))
                     Column(Modifier.weight(1f)) {
                         Text(entry.title, style = MaterialTheme.typography.titleMedium, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        entry.uploader?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.7f), maxLines = 1) }
+                        // Over the video it is always dark, whatever the app's theme.
+                        SourceLine(entry.url, entry.uploader, MaterialTheme.typography.bodySmall, Color.White.copy(alpha = 0.7f), onDark = true)
                     }
                 }
 

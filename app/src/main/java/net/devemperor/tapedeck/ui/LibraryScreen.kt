@@ -114,6 +114,7 @@ import net.devemperor.tapedeck.data.LibrarySort
 import net.devemperor.tapedeck.data.MediaKind
 import net.devemperor.tapedeck.engine.AppInstallState
 import net.devemperor.tapedeck.engine.AppUpdates
+import net.devemperor.tapedeck.engine.Site
 import net.devemperor.tapedeck.engine.Engine
 import net.devemperor.tapedeck.engine.ErrorKind
 import net.devemperor.tapedeck.engine.LiveProgress
@@ -585,12 +586,17 @@ private fun DownloadCard(
                         }
                         Text(status, style = MaterialTheme.typography.bodySmall, color = color, maxLines = 2, overflow = TextOverflow.Ellipsis)
                     }
-                    Text(
-                        optionsLabel(entry),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
-                        modifier = Modifier.padding(top = 2.dp),
-                    )
+                    Row(Modifier.padding(top = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Site.of(entry.url)?.let { site ->
+                            SiteLogo(site, size = 12.dp)
+                            Spacer(Modifier.width(5.dp))
+                        }
+                        Text(
+                            optionsLabel(entry),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
+                        )
+                    }
                 }
                 if (failed) {
                     IconButton(onClick = onRetry) { Icon(Icons.Rounded.Replay, stringResource(R.string.retry)) }
@@ -695,9 +701,8 @@ private fun EntryCard(
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
                 Text(entry.title, style = MaterialTheme.typography.titleSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                entry.uploader?.let {
-                    Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                }
+                // The site's logo before the channel shows at a glance whether it is from YouTube, Instagram …
+                SourceLine(entry.url, entry.uploader, MaterialTheme.typography.bodySmall, MaterialTheme.colorScheme.onSurfaceVariant)
                 Spacer(Modifier.height(4.dp))
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     when {

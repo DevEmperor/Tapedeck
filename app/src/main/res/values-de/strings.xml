@@ -247,7 +247,7 @@
     <string name="app_updated_body">Tippen zum Öffnen</string>
     <string name="source_code">Quellcode</string>
     <string name="licenses">Open Source</string>
-    <string name="licenses_body">yt-dlp (Unlicense), youtubedl-android (GPL-3.0), Python (PSF), FFmpeg (GPL), QuickJS und QuickJS-NG (MIT), AndroidX Media3 (Apache-2.0), Coil (Apache-2.0), OkHttp (Apache-2.0). Tapedeck selbst steht unter GPL-3.0.</string>
+    <string name="licenses_body">yt-dlp (Unlicense), youtubedl-android (GPL-3.0), Python (PSF), FFmpeg (GPL), QuickJS und QuickJS-NG (MIT), AndroidX Media3 (Apache-2.0), Coil (Apache-2.0), OkHttp (Apache-2.0). Logos der Seiten: Simple Icons (CC0-1.0), die Marken gehören ihren Inhabern. Tapedeck selbst steht unter GPL-3.0.</string>
     <string name="legal_title">Bitte beachten</string>
     <string name="legal_body">Lade nur herunter, was du behalten darfst, etwa eigene Videos, freie Inhalte oder eine Privatkopie, wo das Recht sie erlaubt.</string>
 

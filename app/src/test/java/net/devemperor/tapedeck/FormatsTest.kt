@@ -7,6 +7,7 @@ import net.devemperor.tapedeck.engine.ErrorKind
 import net.devemperor.tapedeck.engine.Errors
 import net.devemperor.tapedeck.engine.Formats
 import net.devemperor.tapedeck.engine.Links
+import net.devemperor.tapedeck.engine.Site
 import net.devemperor.tapedeck.engine.YtDlpArgs
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -181,6 +182,26 @@ class FormatsTest {
         assertEquals("https://www.facebook.com/watch/?v=123", Links.clean("https://www.facebook.com/watch/?v=123&mibextid=abc&rdid=xyz"))
         // Elsewhere "t" may be a start time and stays.
         assertEquals("https://vimeo.com/76979871?t=30", Links.clean("https://vimeo.com/76979871?t=30&utm_source=share"))
+    }
+
+    @Test
+    fun `knows the big sites by their links, short links and subdomains included`() {
+        assertEquals(Site.YOUTUBE, Site.of("https://www.youtube.com/watch?v=jNQXAC9IVRw"))
+        assertEquals(Site.YOUTUBE, Site.of("https://youtu.be/jNQXAC9IVRw"))
+        assertEquals(Site.YOUTUBE, Site.of("https://music.youtube.com/watch?v=x"))
+        assertEquals(Site.INSTAGRAM, Site.of("https://www.instagram.com/reel/C1a2B3c4D5e/"))
+        assertEquals(Site.TIKTOK, Site.of("https://vm.tiktok.com/ZMabcdef/"))
+        assertEquals(Site.X, Site.of("https://twitter.com/user/status/1"))
+        assertEquals(Site.X, Site.of("https://x.com/user/status/1"))
+        assertEquals(Site.FACEBOOK, Site.of("https://fb.watch/abc/"))
+        assertEquals(Site.REDDIT, Site.of("https://v.redd.it/abc"))
+        assertEquals(Site.SOUNDCLOUD, Site.of("https://on.soundcloud.com/abc"))
+        assertEquals(Site.BANDCAMP, Site.of("https://artist.bandcamp.com/track/song"))
+        assertEquals(Site.DAILYMOTION, Site.of("https://dai.ly/x5kesuj"))
+        assertNull(Site.of("https://www.ardmediathek.de/video/x"))
+        assertNull(Site.of("https://notyoutube.com/watch?v=x"))
+        assertNull(Site.of("not a link"))
+        assertNull(Site.of(null))
     }
 
     @Test

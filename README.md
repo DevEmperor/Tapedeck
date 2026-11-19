@@ -151,9 +151,12 @@ stopped.
 ### Keeping your phone tidy
 
 - Library with search, filters (audio, video, new) and sorting; *new* and *heard* at a glance.
+- **Where is it from?** The logo of YouTube, Instagram, TikTok, X, Facebook, Reddit, SoundCloud, Vimeo,
+  Twitch, Dailymotion, Bandcamp, Bilibili and a few more sits next to the channel name.
 - Delete with undo, **keep** a download to protect it, or delete everything heard.
 - **Automatic clean-up** after 1–90 days, counted from the download or from when you heard it to the end.
-- **Save to Downloads** to copy a file to a USB stick, or share it.
+- **Save to Downloads** to copy a file to a USB stick, or share it — both named after the video's
+  title, not `media.mp4`.
 
 ### Updates without a store
 
@@ -239,6 +242,8 @@ your law allows it. The terms of YouTube, Instagram and other sites restrict dow
 Tapedeck is free software under the [GNU General Public License v3.0](LICENSE) or later.
 It bundles yt-dlp (Unlicense), youtubedl-android (GPL-3.0), Python (PSF), FFmpeg (GPL), QuickJS and
 QuickJS-NG (MIT; fetched by `tools/fetch-quickjs-ng.sh`), AndroidX Media3, Coil and OkHttp (Apache-2.0).
+The site logos come from [Simple Icons](https://simpleicons.org) (CC0-1.0); the brands belong to their
+owners and only show where a download comes from.
 
 Questions or ideas? [Open an issue](https://github.com/DevEmperor/Tapedeck/issues) or write to
 contact@devemperor.net.

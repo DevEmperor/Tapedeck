@@ -1,5 +1,6 @@
 package net.devemperor.tapedeck.data
 
+import android.content.ClipData
 import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
@@ -45,11 +46,16 @@ object Storage {
 
     fun shareIntent(context: Context, entry: Entry): Intent? {
         val file = entry.mediaFile?.let(::File)?.takeIf { it.exists() } ?: return null
-        val uri = FileProvider.getUriForFile(context, context.packageName + ".files", file)
+        // On disk every download is "media.mp4"; the receiving app gets the title as the file's name
+        // ("Big Buck Bunny.mp4"), the way "Save to Downloads" names it.
+        val name = fileNameFor(entry.title, file.extension)
+        val uri = FileProvider.getUriForFile(context, context.packageName + ".files", file, name)
         val send = Intent(Intent.ACTION_SEND).apply {
             type = mimeType(file)
             putExtra(Intent.EXTRA_STREAM, uri)
             putExtra(Intent.EXTRA_TITLE, entry.title)
+            // The share sheet's preview reads the name from here as well.
+            clipData = ClipData.newUri(context.contentResolver, name, uri)
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
         return Intent.createChooser(send, entry.title)
