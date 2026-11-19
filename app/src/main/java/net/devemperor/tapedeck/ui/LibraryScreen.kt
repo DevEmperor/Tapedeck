@@ -16,6 +16,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -68,6 +69,7 @@ import androidx.compose.material.icons.rounded.SaveAlt
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.Share
+import androidx.compose.material.icons.rounded.SignalCellularAlt
 import androidx.compose.material.icons.rounded.SystemUpdate
 import androidx.compose.material.icons.rounded.Timer
 import androidx.compose.material.icons.rounded.WifiOff
@@ -76,6 +78,7 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.FilledIconButton
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.HorizontalDivider
@@ -96,6 +99,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -108,6 +112,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
@@ -202,8 +207,8 @@ fun LibraryScreen(
         arrived = emptySet()
     }
 
-    // Dragging a download: the mixtape tray slides in at the top until the drag ends.
-    var dragActive by remember { mutableStateOf(false) }
+    // Dragging a download: the shelf's cassettes take it (and the list brings the shelf into view).
+    val drag = remember { EntryDrag() }
     var newMixtapeFor by remember { mutableStateOf<String?>(null) }
 
     // A download and the library card it becomes are one item under one key: when the download
@@ -225,7 +230,7 @@ fun LibraryScreen(
                         },
                         vm = vm,
                         arrived = entry.id in arrived,
-                        onDragStart = { dragActive = true },
+                        onDragStart = { drag.active = true },
                         travels = playerOrigin == entry.id && openMixtape == null,
                         playerOpen = playerOpen,
                     )
@@ -233,9 +238,11 @@ fun LibraryScreen(
                     DownloadCard(
                         entry = entry,
                         progress = live[entry.id],
+                        wifiOnly = settings.wifiOnly,
                         onCancel = { vm.cancel(entry.id) },
                         onRetry = { vm.retry(entry.id) },
                         onDelete = { vm.delete(setOf(entry.id)) },
+                        onMobileData = { vm.useMobileData(entry.id) },
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 5.dp),
                     )
                 }
@@ -244,7 +251,37 @@ fun LibraryScreen(
     }
 
     val listState = rememberLazyListState()
-    Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).entryDragWatcher { dragActive = it }) {
+    // The shelf shows while a download is dragged even when it otherwise would not (searching, no mixtapes yet).
+    val showShelf = drag.active || (mixtapes.isNotEmpty() && query.isBlank())
+    // Its place in the list: the five items at the top, then the downloads with their head. Keep in step with the list.
+    val shelfIndex = 5 + if (downloads.isNotEmpty()) downloads.size + 1 else 0
+    val density = LocalDensity.current
+    val statusBar = WindowInsets.statusBars.getTop(density)
+    // A drag brings the shelf into view if it is not; when the drag is over, the list returns to where it was.
+    var returnTo by remember { mutableStateOf<Pair<Int, Int>?>(null) }
+    LaunchedEffect(drag.active) {
+        if (drag.active) {
+            withFrameNanos { } // the shelf may only just have been added
+            val info = listState.layoutInfo
+            val top = statusBar + with(density) { 4.dp.roundToPx() }
+            val bottom = info.viewportSize.height - info.afterContentPadding
+            val shelf = info.visibleItemsInfo.firstOrNull { it.key == "mixtapes" }
+            if (shelf != null && shelf.offset >= top && shelf.offset + shelf.size <= bottom) return@LaunchedEffect
+            returnTo = listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset
+            if (shelf != null) {
+                listState.animateScrollBy((shelf.offset - top).toFloat(), tween(320))
+            } else {
+                listState.animateScrollToItem(shelfIndex)
+                listState.animateScrollBy(-top.toFloat(), tween(160))
+            }
+        } else {
+            val (index, offset) = returnTo ?: return@LaunchedEffect
+            returnTo = null
+            delay(350)
+            listState.animateScrollToItem(index, offset)
+        }
+    }
+    Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).entryDragWatcher(drag)) {
         LazyColumn(
             state = listState,
             modifier = Modifier.fillMaxSize(),
@@ -265,11 +302,24 @@ fun LibraryScreen(
             item(key = "app-update") { AppUpdateBanner(vm) }
             item(key = "clipboard") { ClipboardBanner(vm) }
             if (downloads.isNotEmpty()) {
-                item(key = "downloads-header") { SectionHeader(stringResource(R.string.section_downloads), downloads.size) }
+                item(key = "downloads-header") {
+                    SectionHeader(stringResource(R.string.section_downloads), downloads.size) {
+                        // Several waiting for Wi-Fi: all of them over mobile data with one tap.
+                        if (settings.wifiOnly && downloads.count { it.waitsForWifi } > 1) {
+                            TextButton(onClick = { vm.useMobileData() }) {
+                                Icon(Icons.Rounded.SignalCellularAlt, null, Modifier.size(18.dp))
+                                Spacer(Modifier.width(6.dp))
+                                Text(stringResource(R.string.use_mobile_data_all))
+                            }
+                        }
+                    }
+                }
                 items(downloads, key = { "i-" + it.id }) { entry -> libraryItem(entry) }
             }
-            if (mixtapes.isNotEmpty() && query.isBlank()) {
-                item(key = "mixtapes") { MixtapeShelf(vm, visible, playerState, openMixtape, onOpen = onOpenMixtape) }
+            if (showShelf) {
+                item(key = "mixtapes") {
+                    MixtapeShelf(vm, visible, playerState, openMixtape, onOpen = onOpenMixtape, drag = drag, onDropNew = { newMixtapeFor = it })
+                }
             }
             if (done.isNotEmpty()) {
                 // The library as a section of its own: count and sorting in its head, the filters right under it.
@@ -332,14 +382,6 @@ fun LibraryScreen(
                 }
             }
         }
-
-        MixtapeDropTray(
-            visible = dragActive,
-            mixtapes = mixtapes,
-            onDrop = vm::dropOnMixtape,
-            onDropNew = { newMixtapeFor = it },
-            modifier = Modifier.align(Alignment.TopCenter),
-        )
     }
     newMixtapeFor?.let { entryId ->
         NameDialog(R.string.mixtape_new, "", R.string.mixtape_create, onDismiss = { newMixtapeFor = null }) { name ->
@@ -609,17 +651,21 @@ fun SectionHeader(title: String, count: Int? = null, actions: @Composable RowSco
         Modifier.fillMaxWidth().padding(start = 20.dp, end = 8.dp, top = 14.dp, bottom = 4.dp).height(40.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(title, style = MaterialTheme.typography.titleMedium)
-        if (count != null) {
-            Spacer(Modifier.width(8.dp))
-            Text(
-                "$count",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onPrimaryContainer,
-                modifier = Modifier.background(MaterialTheme.colorScheme.primaryContainer, CircleShape).padding(horizontal = 8.dp, vertical = 2.dp),
-            )
+        // The title (it may change, e.g. to a hint while a download is dragged) gives way to the actions.
+        Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+            Crossfade(title, Modifier.weight(1f, fill = false), label = "section-title") { text ->
+                Text(text, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+            if (count != null) {
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    "$count",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                    modifier = Modifier.background(MaterialTheme.colorScheme.primaryContainer, CircleShape).padding(horizontal = 8.dp, vertical = 2.dp),
+                )
+            }
         }
-        Spacer(Modifier.weight(1f))
         actions()
     }
 }
@@ -673,13 +719,16 @@ private fun FilterRow(filter: LibraryFilter, onFilter: (LibraryFilter) -> Unit, 
 private fun DownloadCard(
     entry: Entry,
     progress: LiveProgress?,
+    wifiOnly: Boolean,
     onCancel: () -> Unit,
     onRetry: () -> Unit,
     onDelete: () -> Unit,
+    onMobileData: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
     val failed = entry.state == DownloadState.FAILED
+    val forWifi = wifiOnly && entry.waitsForWifi
     Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surfaceContainer, modifier = modifier.fillMaxWidth()) {
         Column(Modifier.padding(12.dp).animateContentSize()) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -690,7 +739,9 @@ private fun DownloadCard(
                     Spacer(Modifier.height(3.dp))
                     val (status, color) = when (entry.state) {
                         DownloadState.QUEUED -> stringResource(R.string.state_queued) to MaterialTheme.colorScheme.onSurfaceVariant
-                        DownloadState.WAITING_NETWORK -> stringResource(R.string.state_waiting_network) to MaterialTheme.colorScheme.secondary
+                        DownloadState.WAITING_NETWORK ->
+                            stringResource(if (forWifi) R.string.state_waiting_network else R.string.state_waiting_connection) to
+                                MaterialTheme.colorScheme.secondary
                         DownloadState.RUNNING -> Format.progress(context, progress) to MaterialTheme.colorScheme.onSurfaceVariant
                         DownloadState.FAILED -> stringResource(errorText(entry.errorKind)) to MaterialTheme.colorScheme.error
                         else -> "" to MaterialTheme.colorScheme.onSurfaceVariant
@@ -725,6 +776,16 @@ private fun DownloadCard(
                 Spacer(Modifier.height(12.dp))
                 // The download as tape running from one reel to the other.
                 TapeTransport(fraction = progress?.fraction, running = true)
+            }
+            // "Wi-Fi only" holds it back: load it over mobile data anyway.
+            if (forWifi) {
+                Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.End) {
+                    FilledTonalButton(onClick = onMobileData) {
+                        Icon(Icons.Rounded.SignalCellularAlt, null, Modifier.size(18.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text(stringResource(R.string.use_mobile_data))
+                    }
+                }
             }
             if (failed && !entry.errorDetail.isNullOrBlank() && entry.errorKind == ErrorKind.UNKNOWN.name) {
                 Text(

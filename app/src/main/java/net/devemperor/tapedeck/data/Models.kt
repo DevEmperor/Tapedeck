@@ -79,10 +79,14 @@ data class Entry(
     /** Size of a video's picture (from yt-dlp's info), so an upright one is shown upright before it plays. */
     val videoWidth: Int? = null,
     val videoHeight: Int? = null,
+    /** May load over mobile data although "Wi-Fi only" is on: the user said so for this download. */
+    val mobileData: Boolean = false,
 ) {
     val isDone get() = state == DownloadState.DONE && mediaFile != null
     val isActive get() = state == DownloadState.QUEUED || state == DownloadState.WAITING_NETWORK || state == DownloadState.RUNNING
     val isVideo get() = options.kind == MediaKind.VIDEO
+    /** Held back by "Wi-Fi only" (or by having no connection at all) and not let onto mobile data. */
+    val waitsForWifi get() = state == DownloadState.WAITING_NETWORK && !mobileData
     val listenedFraction: Float
         get() = when {
             finished -> 1f

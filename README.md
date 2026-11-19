@@ -115,7 +115,8 @@ stopped.
   their real sizes — a notification, and readable errors (unavailable, private, age-restricted, no
   space, …).
 - **Wi-Fi only**, on by default: downloads wait for Wi-Fi and continue by themselves, picking up where
-  they stopped.
+  they stopped. Need one now anyway? *Use mobile data* on its card (or for all waiting ones, or right in
+  the notification) lets it go ahead — and on mobile data, the download sheet offers the same switch.
 - **SponsorBlock**, optional: cuts sponsored parts, self-promotion and "subscribe" reminders out of new
   downloads.
 
@@ -165,8 +166,10 @@ stopped.
 - **One after the other**: *Play* runs a mixtape in its order (and turns into *Pause* / *Resume* while
   it plays), *Shuffle* mixes it, and with *Repeat* it starts over. Drag an item by its handle to move it;
   a download can be on several mixtapes.
-- **Drag onto a mixtape**: press and hold a card in the library, and a tray with every mixtape (and
-  *New mixtape*) slides in at the top — drop it there.
+- **Drag onto a mixtape**: press and hold a card in the library and the shelf comes into view, every
+  cassette waiting with a dashed ring; drop the card right on one (it grows and its reels turn when you
+  are over it) or on *New mixtape* in the shelf's head. Hold it near the shelf's edge to reach the
+  cassettes further along; the list then goes back to where you were.
 - **Straight onto a mixtape** when downloading — and a whole YouTube playlist can become a new mixtape
   of its own name, in the playlist's order.
 - What is on a mixtape is never removed by the automatic clean-up (a setting, on by default). Deleting a
@@ -191,8 +194,8 @@ stopped.
 ### Keeping your phone tidy
 
 - Clear sections — *Downloads*, *Mixtapes*, *Library* — with the library's sorting and filters (audio,
-  video, new) in its own head; search; *new* and *heard* at a glance; a scrollbar to jump through long
-  lists.
+  video, new) in its own head; search; *new* and *heard* at a glance; a steady scrollbar (it keeps the
+  height of every row it has seen, instead of guessing) to jump through long lists.
 - **Where is it from?** The logo of YouTube, Instagram, TikTok, X, Facebook, Reddit, SoundCloud, Vimeo,
   Twitch, Dailymotion, Bandcamp, Bilibili and a few more sits next to the channel name.
 - Delete with undo, **keep** a download to protect it, or delete everything heard.

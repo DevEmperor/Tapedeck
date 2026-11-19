@@ -1,12 +1,14 @@
 package net.devemperor.tapedeck.ui
 
 import android.content.ClipData
-import android.content.ClipDescription
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.draganddrop.dragAndDropSource
 import androidx.compose.foundation.draganddrop.dragAndDropTarget
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -15,23 +17,11 @@ import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.indication
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.PressInteraction
-import androidx.compose.material3.ripple
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.ui.input.pointer.pointerInput
-import kotlinx.coroutines.launch
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -39,11 +29,19 @@ import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.Stable
+import androidx.compose.runtime.State
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -52,32 +50,82 @@ import androidx.compose.ui.draganddrop.DragAndDropTarget
 import androidx.compose.ui.draganddrop.DragAndDropTransferData
 import androidx.compose.ui.draganddrop.mimeTypes
 import androidx.compose.ui.draganddrop.toAndroidDragEvent
-import androidx.compose.ui.draw.scale
-import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.launch
 import net.devemperor.tapedeck.R
-import net.devemperor.tapedeck.data.Mixtape
 
-/** The label of a download being dragged, so only Tapedeck's own drags are taken. */
+/**
+ * A dragged download carries its id under a type of its own, so only Tapedeck's drop spots take it — a
+ * text field (the search) would otherwise paste the id.
+ */
+private const val ENTRY_MIME = "application/vnd.net.devemperor.tapedeck.entry"
 private const val DRAG_LABEL = "tapedeck-entry"
 
-private fun DragAndDropEvent.isEntry(): Boolean =
-    mimeTypes().contains(ClipDescription.MIMETYPE_TEXT_PLAIN) && toAndroidDragEvent().clipDescription?.label == DRAG_LABEL
+private fun DragAndDropEvent.isEntry(): Boolean = ENTRY_MIME in mimeTypes()
 
 private fun DragAndDropEvent.entryId(): String? =
     toAndroidDragEvent().clipData?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.text?.toString()
 
-/** A long press lifts the card; it can then be dropped on a mixtape in the tray at the top. */
+private fun DragAndDropEvent.position(): Offset = toAndroidDragEvent().let { Offset(it.x, it.y) }
+
+/**
+ * A download being dragged: whether one is, where the finger is (pixels from the screen's top left), and
+ * the spots it can be dropped on. The spots are found by their bounds rather than as drop targets of their
+ * own: the shelf may only come into view (and be composed) after the drag began, and Android hands a drag
+ * only to targets that were there at its start.
+ */
+@Stable
+class EntryDrag {
+    var active by mutableStateOf(false)
+    var position by mutableStateOf<Offset?>(null)
+
+    private class Spot(val bounds: Rect, val onDrop: State<(String) -> Unit>)
+
+    private val spots = mutableStateMapOf<Any, Spot>()
+
+    /** The key of the spot under the finger, if any. */
+    val hovered: Any? by derivedStateOf {
+        val at = position ?: return@derivedStateOf null
+        spots.entries.firstOrNull { it.value.bounds.contains(at) }?.key
+    }
+
+    internal fun place(key: Any, bounds: Rect, onDrop: State<(String) -> Unit>) {
+        if (spots[key]?.bounds != bounds) spots[key] = Spot(bounds, onDrop)
+    }
+
+    internal fun remove(key: Any) {
+        spots.remove(key)
+    }
+
+    /** Drops [entryId] on the spot at [at]; false if there is none. */
+    internal fun drop(at: Offset, entryId: String): Boolean {
+        val spot = spots.values.firstOrNull { it.bounds.contains(at) } ?: return false
+        spot.onDrop.value(entryId)
+        return true
+    }
+}
+
+/** A long press lifts the card; it can then be dropped on a cassette of the mixtape shelf. */
 @OptIn(ExperimentalFoundationApi::class)
 fun Modifier.entryDragSource(entryId: String, onStart: () -> Unit): Modifier = dragAndDropSource { _ ->
     onStart()
-    DragAndDropTransferData(ClipData(DRAG_LABEL, arrayOf(ClipDescription.MIMETYPE_TEXT_PLAIN), ClipData.Item(entryId)))
+    DragAndDropTransferData(ClipData(DRAG_LABEL, arrayOf(ENTRY_MIME), ClipData.Item(entryId)))
 }
 
 /**
@@ -107,113 +155,114 @@ fun Modifier.tapLeavingLongPress(onClick: () -> Unit): Modifier {
     }
 }
 
-/** Notices when a drag of a download starts and ends anywhere on the screen. */
+/**
+ * The one drop target, on the whole screen: follows a drag of a download (when it starts and ends, where
+ * the finger is) and hands a drop to the spot under the finger.
+ */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun Modifier.entryDragWatcher(onActive: (Boolean) -> Unit): Modifier {
-    val target = remember {
+fun Modifier.entryDragWatcher(drag: EntryDrag): Modifier {
+    val haptic = LocalHapticFeedback.current
+    val target = remember(drag, haptic) {
         object : DragAndDropTarget {
-            override fun onStarted(event: DragAndDropEvent) = onActive(true)
-            override fun onEnded(event: DragAndDropEvent) = onActive(false)
-            override fun onDrop(event: DragAndDropEvent): Boolean = false
+            override fun onStarted(event: DragAndDropEvent) {
+                drag.active = true
+            }
+            override fun onEntered(event: DragAndDropEvent) {
+                drag.position = event.position()
+            }
+            override fun onMoved(event: DragAndDropEvent) {
+                drag.position = event.position()
+            }
+            override fun onEnded(event: DragAndDropEvent) {
+                drag.active = false
+                drag.position = null
+            }
+            override fun onDrop(event: DragAndDropEvent): Boolean {
+                val id = event.entryId() ?: return false
+                if (!drag.drop(event.position(), id)) return false
+                haptic.performHapticFeedback(HapticFeedbackType.Confirm)
+                return true
+            }
         }
     }
     return dragAndDropTarget(shouldStartDragAndDrop = { it.isEntry() }, target = target)
 }
 
 /**
- * The tray that slides in at the top while a download is dragged: every mixtape as a small cassette,
- * and "New mixtape". The one under the finger grows and gets a ring in its colour.
+ * Makes this a spot a dragged download can be dropped on, under [key]; [onDrop] gets its id. Whether the
+ * download is over it reads as `drag.hovered == key` — with a tick to feel when it gets there.
  */
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun MixtapeDropTray(
-    visible: Boolean,
-    mixtapes: List<Mixtape>,
-    onDrop: (mixtapeId: String, entryId: String) -> Unit,
-    onDropNew: (entryId: String) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    // Always composed, so its drop targets exist when the drag starts — and without anything that takes
-    // touches (no Surface, no scrolling row), so while hidden it does not block the screen beneath.
-    val shown by animateFloatAsState(if (visible) 1f else 0f, tween(220), label = "drop-tray")
-    Box(
-        modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 12.dp, vertical = 8.dp)
-            .graphicsLayer {
-                alpha = shown
-                translationY = (1f - shown) * -size.height
-            },
-    ) {
-        Column(
-            Modifier.fillMaxWidth().shadow(16.dp, RoundedCornerShape(22.dp))
-                .background(MaterialTheme.colorScheme.surfaceContainerHighest, RoundedCornerShape(22.dp))
-                .padding(vertical = 12.dp),
-        ) {
-            Text(
-                stringResource(R.string.drag_to_mixtape),
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.padding(horizontal = 16.dp),
-            )
-            Spacer(Modifier.height(10.dp))
-            FlowRow(
-                Modifier.padding(horizontal = 12.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                mixtapes.forEach { tape ->
-                    key(tape.id) {
-                        DropSpot(mixtapeColor(tape.color), onDrop = { entryId -> onDrop(tape.id, entryId) }) {
-                            Cassette(tape.name, mixtapeColor(tape.color), Modifier.width(96.dp))
-                        }
-                    }
-                }
-                DropSpot(MaterialTheme.colorScheme.primary, onDrop = onDropNew) {
-                    Box(
-                        Modifier.width(96.dp).aspectRatio(1.58f).border(2.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(10.dp)),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Icon(Icons.Rounded.Add, null, modifier = Modifier.size(22.dp))
-                            Text(stringResource(R.string.mixtape_new), style = MaterialTheme.typography.labelSmall, textAlign = TextAlign.Center)
-                        }
-                    }
-                }
-            }
-        }
+fun Modifier.entryDropSpot(drag: EntryDrag, key: Any, onDrop: (String) -> Unit): Modifier {
+    val drop = rememberUpdatedState(onDrop)
+    val haptic = LocalHapticFeedback.current
+    val over = drag.hovered == key
+    LaunchedEffect(over) {
+        if (over) haptic.performHapticFeedback(HapticFeedbackType.SegmentTick)
+    }
+    DisposableEffect(drag, key) {
+        onDispose { drag.remove(key) }
+    }
+    return onGloballyPositioned { drag.place(key, it.boundsInRoot(), drop) }
+}
+
+/** How a drop spot looks during a drag: waiting for the download, or with it right over the spot. */
+enum class DropLook { NONE, READY, HOVER }
+
+/**
+ * A ring around a drop spot, [inset] outside its edge: dashed and breathing while a download is dragged,
+ * solid and bold once it is over the spot.
+ */
+@Composable
+fun Modifier.dropRing(look: DropLook, color: Color, corner: Dp, inset: Dp = 3.dp): Modifier {
+    // Only runs while a drag is on, so the shelf does not redraw for nothing the rest of the time.
+    val breath = if (look == DropLook.READY) {
+        rememberInfiniteTransition(label = "drop-ring")
+            .animateFloat(0.35f, 0.9f, infiniteRepeatable(tween(650), RepeatMode.Reverse), label = "drop-ring-alpha")
+    } else null
+    return drawWithContent {
+        drawContent()
+        if (look == DropLook.NONE) return@drawWithContent
+        val out = inset.toPx()
+        val hovered = look == DropLook.HOVER
+        drawRoundRect(
+            color = color.copy(alpha = if (hovered) 1f else breath?.value ?: 0.6f),
+            topLeft = Offset(-out, -out),
+            size = Size(size.width + 2 * out, size.height + 2 * out),
+            cornerRadius = CornerRadius((corner + inset).toPx()),
+            style = Stroke(
+                width = (if (hovered) 3.dp else 2.dp).toPx(),
+                pathEffect = if (hovered) null else PathEffect.dashPathEffect(floatArrayOf(8.dp.toPx(), 5.dp.toPx())),
+            ),
+        )
     }
 }
 
-@OptIn(ExperimentalFoundationApi::class)
+private const val NEW_MIXTAPE_SPOT = "new-mixtape"
+
+/** "+ New mixtape" in the shelf's head while a download is dragged: dropped there, it starts a mixtape of its own. */
 @Composable
-private fun DropSpot(ring: Color, onDrop: (String) -> Unit, content: @Composable () -> Unit) {
-    var over by remember { mutableStateOf(false) }
-    val haptic = LocalHapticFeedback.current
-    val grow by animateFloatAsState(if (over) 1.1f else 1f, label = "drop-spot")
-    val target = remember(onDrop) {
-        object : DragAndDropTarget {
-            override fun onEntered(event: DragAndDropEvent) {
-                over = true
-                haptic.performHapticFeedback(HapticFeedbackType.SegmentTick)
+fun NewMixtapeDropSpot(drag: EntryDrag, onDrop: (String) -> Unit) {
+    val over = drag.hovered == NEW_MIXTAPE_SPOT
+    val grow by animateFloatAsState(if (over) 1.08f else 1f, label = "new-mixtape-drop")
+    val primary = MaterialTheme.colorScheme.primary
+    val shape = RoundedCornerShape(20.dp)
+    Row(
+        Modifier.padding(end = 8.dp)
+            .entryDropSpot(drag, NEW_MIXTAPE_SPOT, onDrop)
+            .graphicsLayer {
+                scaleX = grow
+                scaleY = grow
             }
-            override fun onExited(event: DragAndDropEvent) {
-                over = false
-            }
-            override fun onEnded(event: DragAndDropEvent) {
-                over = false
-            }
-            override fun onDrop(event: DragAndDropEvent): Boolean {
-                val id = event.entryId() ?: return false
-                haptic.performHapticFeedback(HapticFeedbackType.Confirm)
-                onDrop(id)
-                return true
-            }
-        }
+            .dropRing(if (over) DropLook.HOVER else DropLook.READY, primary, corner = 20.dp, inset = 0.dp)
+            .background(if (over) MaterialTheme.colorScheme.primaryContainer else Color.Transparent, shape)
+            .height(40.dp)
+            .padding(horizontal = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(Icons.Rounded.Add, null, tint = primary, modifier = Modifier.size(18.dp))
+        Spacer(Modifier.width(6.dp))
+        Text(stringResource(R.string.mixtape_new), style = MaterialTheme.typography.labelLarge, color = primary)
     }
-    Box(
-        Modifier.scale(grow)
-            .border(if (over) 3.dp else 0.dp, if (over) ring else Color.Transparent, RoundedCornerShape(12.dp))
-            .padding(3.dp)
-            .dragAndDropTarget(shouldStartDragAndDrop = { it.isEntry() }, target = target),
-    ) { content() }
 }

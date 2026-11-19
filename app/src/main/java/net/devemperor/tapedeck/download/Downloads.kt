@@ -27,6 +27,8 @@ data class NewDownload(
     val uploader: String? = null,
     val thumbnailUrl: String? = null,
     val durationMs: Long = 0,
+    /** Load over mobile data even with "Wi-Fi only" on. */
+    val mobileData: Boolean = false,
 )
 
 /** What the UI calls to start, stop and remove downloads; [DownloadService] does the work. */
@@ -48,6 +50,7 @@ class Downloads(private val app: TapedeckApp, private val scope: CoroutineScope)
                 thumbnailUrl = request.thumbnailUrl ?: Links.thumbnailFor(url),
                 // Keeps a playlist in its own order in the queue.
                 createdAt = now + index,
+                mobileData = request.mobileData,
             )
         }
         app.library.add(entries.reversed())
@@ -64,6 +67,17 @@ class Downloads(private val app: TapedeckApp, private val scope: CoroutineScope)
 
     fun retry(id: String) {
         app.library.update(id) { it.copy(state = DownloadState.QUEUED, errorKind = null, errorDetail = null, autoRetries = 0) }
+        start()
+    }
+
+    /**
+     * Downloads waiting for Wi-Fi go ahead over mobile data (all waiting ones when [ids] is null), and so
+     * do later attempts of them; "Wi-Fi only" keeps holding back everything else.
+     */
+    fun allowMobileData(ids: Set<String>? = null) {
+        app.library.updateAll { entry ->
+            if (entry.isActive && !entry.mobileData && (ids == null || entry.id in ids)) entry.copy(mobileData = true) else entry
+        }
         start()
     }
 

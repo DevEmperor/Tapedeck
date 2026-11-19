@@ -7,8 +7,15 @@ import android.net.NetworkCapabilities
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import net.devemperor.tapedeck.data.Entry
 
-data class NetState(val connected: Boolean, val unmetered: Boolean)
+data class NetState(val connected: Boolean, val unmetered: Boolean) {
+    /** On mobile data (or another network that costs): what "Wi-Fi only" holds back. */
+    val onMobileData: Boolean get() = connected && !unmetered
+
+    /** Whether [entry] may load now: any connection, but mobile data only without "Wi-Fi only" or with the user's go-ahead. */
+    fun allows(entry: Entry, wifiOnly: Boolean): Boolean = connected && (unmetered || !wifiOnly || entry.mobileData)
+}
 
 /** Follows the default network, so "Wi-Fi only" downloads can wait and continue by themselves. */
 class NetworkMonitor(context: Context) {

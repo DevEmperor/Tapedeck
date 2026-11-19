@@ -7,6 +7,7 @@ import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.togetherWith
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -66,15 +67,20 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.toMutableStateList
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
@@ -109,38 +115,114 @@ private fun mixtapeProgress(tape: Mixtape, state: PlayerUiState): Float {
 private fun mixtapeVelocity(tape: Mixtape, state: PlayerUiState): Float =
     if (state.isPlaying && state.mixtapeId == tape.id) ReelSpeed.PLAY * state.speed else 0f
 
-/** A cassette on the shelf. While its mixtape is open it has travelled to the top of that page, and comes back on return. */
+/**
+ * A cassette on the shelf. While its mixtape is open it has travelled to the top of that page, and comes
+ * back on return. While a download is dragged it waits with a ring in its colour; with the download over
+ * it, the reels turn as if taking it in.
+ */
 @Composable
-private fun ShelfCassette(tape: Mixtape, state: PlayerUiState, travelling: Boolean) {
-    Box(Modifier.fillMaxWidth().aspectRatio(1.58f)) {
+private fun ShelfCassette(tape: Mixtape, state: PlayerUiState, travelling: Boolean, look: DropLook) {
+    val color = mixtapeColor(tape.color)
+    // The ring stays inside the 4 dp around the cassette, where the card's clip would cut it.
+    Box(Modifier.fillMaxWidth().aspectRatio(1.58f).dropRing(look, color, corner = 10.dp, inset = 2.dp)) {
         AnimatedVisibility(!travelling, enter = fadeIn(travelSpec()), exit = fadeOut(travelSpec())) {
             Cassette(
                 tape.name,
-                mixtapeColor(tape.color),
+                color,
                 Modifier.sharedTransition(SharedKeys.tape(tape.id), this).fillMaxWidth().shadow(6.dp, MaterialTheme.shapes.small),
-                velocity = mixtapeVelocity(tape, state),
+                velocity = if (look == DropLook.HOVER) ReelSpeed.PLAY * 3f else mixtapeVelocity(tape, state),
                 progress = mixtapeProgress(tape, state),
             )
         }
     }
 }
 
-/** The mixtapes as cassettes on a shelf, above the library; their reels turn while one of them plays. */
+/**
+ * The mixtapes as cassettes on a shelf, above the library; their reels turn while one of them plays.
+ * A download dragged from the library ([drag]) is dropped right on one of them, or on "New mixtape" in
+ * the head; held near the shelf's left or right edge, the shelf scrolls on to the cassettes beyond.
+ */
 @Composable
-fun MixtapeShelf(vm: MainViewModel, entries: List<Entry>, state: PlayerUiState, openMixtape: String?, onOpen: (String) -> Unit) {
+fun MixtapeShelf(
+    vm: MainViewModel,
+    entries: List<Entry>,
+    state: PlayerUiState,
+    openMixtape: String?,
+    onOpen: (String) -> Unit,
+    drag: EntryDrag? = null,
+    onDropNew: (String) -> Unit = {},
+) {
     val mixtapes by vm.mixtapes.collectAsStateWithLifecycle()
     var creating by remember { mutableStateOf(false) }
     val byId = remember(entries) { entries.associateBy { it.id } }
-    Column(Modifier.padding(bottom = 6.dp)) {
-        SectionHeader(stringResource(R.string.mixtapes), mixtapes.size) {
-            IconButton(onClick = { creating = true }) { Icon(Icons.Rounded.Add, stringResource(R.string.mixtape_new)) }
+    val dragging = drag?.active == true
+    val row = rememberLazyListState()
+    var rowBounds by remember { mutableStateOf(Rect.Zero) }
+    val density = LocalDensity.current
+    if (drag != null) {
+        LaunchedEffect(drag, dragging) {
+            if (!dragging) return@LaunchedEffect
+            val edge = with(density) { 56.dp.toPx() }
+            val fastest = with(density) { 800.dp.toPx() }
+            var last = 0L
+            while (true) {
+                withFrameNanos { now ->
+                    val seconds = if (last == 0L) 0f else (now - last) / 1e9f
+                    last = now
+                    val at = drag.position
+                    val bounds = rowBounds
+                    if (at != null && at.y in bounds.top..bounds.bottom) {
+                        val push = when {
+                            at.x > bounds.right - edge -> (at.x - (bounds.right - edge)) / edge
+                            at.x < bounds.left + edge -> -((bounds.left + edge) - at.x) / edge
+                            else -> 0f
+                        }
+                        if (push != 0f) row.dispatchRawDelta(push.coerceIn(-1f, 1f) * fastest * seconds)
+                    }
+                }
+            }
         }
-        LazyRow(contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+    }
+    Column(Modifier.padding(bottom = 6.dp)) {
+        SectionHeader(
+            stringResource(if (dragging) R.string.drag_to_mixtape else R.string.mixtapes),
+            mixtapes.size.takeIf { !dragging },
+        ) {
+            if (drag != null && dragging) {
+                NewMixtapeDropSpot(drag, onDropNew)
+            } else {
+                IconButton(onClick = { creating = true }) { Icon(Icons.Rounded.Add, stringResource(R.string.mixtape_new)) }
+            }
+        }
+        LazyRow(
+            state = row,
+            modifier = Modifier.onGloballyPositioned { rowBounds = it.boundsInRoot() },
+            // Room above and below for a cassette that grows under the dragged download.
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
             items(mixtapes, key = { it.id }) { tape ->
+                val over = drag?.hovered == tape.id
+                val grow by animateFloatAsState(if (over) 1.08f else 1f, label = "shelf-drop")
                 Column(
-                    Modifier.width(156.dp).clip(MaterialTheme.shapes.medium).clickable { onOpen(tape.id) }.padding(4.dp),
+                    Modifier.width(156.dp)
+                        // Before the scale, so the spot keeps its size while the cassette grows.
+                        .then(if (drag == null) Modifier else Modifier.entryDropSpot(drag, tape.id) { id -> vm.dropOnMixtape(tape.id, id) })
+                        .graphicsLayer {
+                            scaleX = grow
+                            scaleY = grow
+                        }
+                        .clip(MaterialTheme.shapes.medium).clickable { onOpen(tape.id) }.padding(4.dp),
                 ) {
-                    ShelfCassette(tape, state, travelling = openMixtape == tape.id)
+                    ShelfCassette(
+                        tape, state,
+                        travelling = openMixtape == tape.id,
+                        look = when {
+                            over -> DropLook.HOVER
+                            dragging -> DropLook.READY
+                            else -> DropLook.NONE
+                        },
+                    )
                     Spacer(Modifier.height(6.dp))
                     Text(
                         mixtapeSummary(tape, byId),

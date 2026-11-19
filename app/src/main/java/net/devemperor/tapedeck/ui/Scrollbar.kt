@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyListLayoutInfo
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
@@ -20,6 +21,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -31,13 +33,85 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
-/** Where the visible part of a list is: [start] and [size] as parts of the whole (0..1). */
-private data class Window(val start: Float, val size: Float)
+/** Where the visible part of a list is: [position] on the way from the top (0) to the end (1), [size] as a part of the whole. */
+private data class Window(val position: Float, val size: Float)
+
+/**
+ * The heights of a list's items as they were last laid out. A lazy list only measures what is on screen,
+ * so these are kept for every item seen once, and an item not seen yet counts as tall as most of the
+ * seen ones are — in the library, a card. The whole list's height, and with it the thumb, then stays put
+ * while scrolling, instead of following whichever items happen to be on screen.
+ */
+private class ItemHeights {
+    private var count = -1
+    private val heights = HashMap<Int, Int>()
+    private val keys = HashMap<Int, Any>()
+
+    /** Takes the heights on screen; a list that changed (items added, removed, sorted) starts over. */
+    fun learn(info: LazyListLayoutInfo) {
+        val reordered = info.visibleItemsInfo.any { item -> keys[item.index]?.let { it != item.key } == true }
+        if (info.totalItemsCount != count || reordered) {
+            heights.clear()
+            keys.clear()
+            count = info.totalItemsCount
+        }
+        info.visibleItemsInfo.forEach {
+            heights[it.index] = it.size
+            keys[it.index] = it.key
+        }
+    }
+
+    /** The height of an item not seen yet: the one most seen items share (in 4 px steps; empty banners aside). */
+    private fun typical(): Float {
+        val groups = heights.entries.filter { it.value > 0 }.groupBy { it.value / 4 }.values
+        // On a tie, the group reaching furthest down the list: what comes next is more of the same.
+        val most = groups.maxWithOrNull(compareBy<List<Map.Entry<Int, Int>>> { it.size }.thenBy { group -> group.maxOf { it.key } })
+        return most?.map { it.value }?.average()?.toFloat() ?: 0f
+    }
+
+    private fun height(index: Int, typical: Float): Float = heights[index]?.toFloat() ?: typical
+
+    private fun content(info: LazyListLayoutInfo, typical: Float): Float {
+        val n = info.totalItemsCount
+        var total = (info.beforeContentPadding + info.afterContentPadding).toFloat() + info.mainAxisItemSpacing * (n - 1).coerceAtLeast(0)
+        for (i in 0 until n) total += height(i, typical)
+        return total
+    }
+
+    fun window(info: LazyListLayoutInfo): Window? {
+        val first = info.visibleItemsInfo.firstOrNull() ?: return null
+        learn(info)
+        val typical = typical()
+        val content = content(info, typical)
+        val viewport = info.viewportSize.height.toFloat()
+        val range = content - viewport
+        if (range < 1f) return null
+        var above = 0f
+        for (i in 0 until first.index) above += height(i, typical) + info.mainAxisItemSpacing
+        val scrolled = above - first.offset
+        return Window(position = (scrolled / range).coerceIn(0f, 1f), size = (viewport / content).coerceIn(0.05f, 1f))
+    }
+
+    /** The item a thumb dragged to [position] (0..1) points at, and how far into it. */
+    fun target(info: LazyListLayoutInfo, position: Float): Pair<Int, Int> {
+        val n = info.totalItemsCount
+        if (n == 0) return 0 to 0
+        val typical = typical()
+        var goal = position * (content(info, typical) - info.viewportSize.height).coerceAtLeast(0f)
+        for (i in 0 until n) {
+            val step = height(i, typical) + info.mainAxisItemSpacing
+            if (goal < step || i == n - 1) return i to goal.roundToInt().coerceAtLeast(0)
+            goal -= step
+        }
+        return n - 1 to 0
+    }
+}
 
 /**
  * A slim scrollbar at the right edge of a long list. It shows while the list moves and fades out a
@@ -46,35 +120,25 @@ private data class Window(val start: Float, val size: Float)
  */
 @Composable
 fun BoxScope.VerticalScrollbar(state: LazyListState, top: Dp = 0.dp, bottom: Dp = 0.dp) {
-    val window by remember(state) {
-        derivedStateOf {
-            val info = state.layoutInfo
-            val items = info.visibleItemsInfo
-            if (items.isEmpty() || info.totalItemsCount == 0 || !(state.canScrollForward || state.canScrollBackward)) return@derivedStateOf null
-            // Items differ in height; their average is close enough for a position.
-            val average = items.sumOf { it.size }.toFloat() / items.size
-            val content = average * info.totalItemsCount
-            val viewport = (info.viewportEndOffset - info.viewportStartOffset).toFloat()
-            val offset = state.firstVisibleItemIndex * average + state.firstVisibleItemScrollOffset
-            Window(start = (offset / content).coerceIn(0f, 1f), size = (viewport / content).coerceIn(0.05f, 1f))
-        }
-    }
+    val heights = remember(state) { ItemHeights() }
+    val window by remember(state) { derivedStateOf { heights.window(state.layoutInfo) } }
     val scope = rememberCoroutineScope()
     Scrollbar(window, state.isScrollInProgress, top, bottom) { fraction ->
-        val total = state.layoutInfo.totalItemsCount
-        if (total > 0) scope.launch { state.scrollToItem((fraction * (total - 1)).roundToInt().coerceIn(0, total - 1)) }
+        scope.launch {
+            val (index, offset) = heights.target(state.layoutInfo, fraction)
+            state.scrollToItem(index, offset)
+        }
     }
 }
 
-/** The same for a plain scrolling column. */
+/** The same for a plain scrolling column, whose whole height is known. */
 @Composable
 fun BoxScope.VerticalScrollbar(state: ScrollState, top: Dp = 0.dp, bottom: Dp = 0.dp) {
     val window by remember(state) {
         derivedStateOf {
             if (state.maxValue <= 0 || state.maxValue == Int.MAX_VALUE) return@derivedStateOf null
             val viewport = state.viewportSize.toFloat()
-            val content = viewport + state.maxValue
-            Window(start = state.value / content, size = (viewport / content).coerceIn(0.05f, 1f))
+            Window(position = state.value.toFloat() / state.maxValue, size = (viewport / (viewport + state.maxValue)).coerceIn(0.05f, 1f))
         }
     }
     val scope = rememberCoroutineScope()
@@ -98,29 +162,42 @@ private fun BoxScope.Scrollbar(window: Window?, scrolling: Boolean, top: Dp, bot
     if (window == null || alpha == 0f) return
     val density = LocalDensity.current
     BoxWithConstraints(Modifier.align(Alignment.TopEnd).fillMaxHeight().padding(top = top, bottom = bottom).width(24.dp).alpha(alpha)) {
-        val track = maxHeight
-        val thumb = track * window.size
-        val thumbTop = (track - thumb) * (window.start / (1f - window.size).coerceAtLeast(0.0001f)).coerceIn(0f, 1f)
-        var dragTop by remember { mutableStateOf(0f) }
-        // Read while dragging: the thumb's size shifts a little as items of other heights scroll by.
-        val trackPx by rememberUpdatedState(with(density) { track.toPx() })
-        val thumbPx by rememberUpdatedState(with(density) { thumb.toPx() })
-        val thumbTopPx by rememberUpdatedState(with(density) { thumbTop.toPx() })
+        val trackPx = constraints.maxHeight.toFloat()
+        // A late correction of the list's height eases in instead of jumping; while dragged, the thumb
+        // keeps its size and stays under the finger.
+        var held by remember { mutableStateOf<Float?>(null) }
+        val eased by animateFloatAsState(window.size, tween(300), label = "scrollbar-size")
+        val thumbPx = trackPx * (held ?: eased)
+        var dragTop by remember { mutableFloatStateOf(0f) }
+        val thumbTop = if (dragging) dragTop else (trackPx - thumbPx) * window.position
+        val trackNow by rememberUpdatedState(trackPx)
+        val thumbNow by rememberUpdatedState(thumbPx)
+        val topNow by rememberUpdatedState(thumbTop)
+        val sizeNow by rememberUpdatedState(eased)
         val jump by rememberUpdatedState(onJump)
         Box(
-            Modifier.offset(y = thumbTop).height(thumb).width(24.dp)
+            Modifier.offset { IntOffset(0, thumbTop.roundToInt()) }
+                .height(with(density) { thumbPx.toDp() })
+                .width(24.dp)
                 .pointerInput(Unit) {
                     detectVerticalDragGestures(
                         onDragStart = {
+                            held = sizeNow
+                            dragTop = topNow
                             dragging = true
-                            dragTop = thumbTopPx
                         },
-                        onDragEnd = { dragging = false },
-                        onDragCancel = { dragging = false },
+                        onDragEnd = {
+                            dragging = false
+                            held = null
+                        },
+                        onDragCancel = {
+                            dragging = false
+                            held = null
+                        },
                     ) { change, amount ->
                         change.consume()
-                        val room = trackPx - thumbPx
-                        dragTop = (dragTop + amount).coerceIn(0f, room.coerceAtLeast(0f))
+                        val room = (trackNow - thumbNow).coerceAtLeast(0f)
+                        dragTop = (dragTop + amount).coerceIn(0f, room)
                         jump(if (room > 0f) dragTop / room else 0f)
                     }
                 },

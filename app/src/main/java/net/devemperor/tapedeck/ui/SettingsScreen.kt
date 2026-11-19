@@ -19,9 +19,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.OpenInNew
@@ -86,18 +86,16 @@ fun SettingsScreen(vm: MainViewModel, onBack: () -> Unit) {
             Spacer(Modifier.width(4.dp))
             Text(stringResource(R.string.settings), style = MaterialTheme.typography.headlineSmall)
         }
-        val listState = rememberLazyListState()
+        // A plain scrolling column, not a lazy list: the few groups are all measured, so the scrollbar
+        // knows the real height instead of guessing it from groups of very different sizes.
+        val scroll = rememberScrollState()
         Box(Modifier.fillMaxSize()) {
-        LazyColumn(
-            Modifier.fillMaxSize(),
-            state = listState,
-            contentPadding = PaddingValues(
-                start = 16.dp, end = 16.dp,
-                bottom = 32.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding(),
-            ),
+        Column(
+            Modifier.fillMaxSize().verticalScroll(scroll)
+                .padding(start = 16.dp, end = 16.dp)
+                .padding(bottom = 32.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            item {
                 Group(R.string.group_downloads) {
                     ChoiceRow(
                         R.string.setting_share, settings.shareAction,
@@ -118,9 +116,7 @@ fun SettingsScreen(vm: MainViewModel, onBack: () -> Unit) {
                         vm.updateSettings { it.copy(sponsorBlock = on) }
                     }
                 }
-            }
-            // The defaults the download sheet starts with; Audio or Video itself is picked there each time.
-            item {
+                // The defaults the download sheet starts with; Audio or Video itself is picked there each time.
                 Group(R.string.kind_audio) {
                     ChoiceRow(
                         R.string.option_format, defaults.audioFormat,
@@ -134,8 +130,6 @@ fun SettingsScreen(vm: MainViewModel, onBack: () -> Unit) {
                         last = true,
                     ) { value -> vm.updateSettings { it.copy(defaults = it.defaults.copy(audioQuality = value)) } }
                 }
-            }
-            item {
                 Group(R.string.kind_video) {
                     ChoiceRow(
                         R.string.option_format, defaults.videoFormat,
@@ -148,8 +142,6 @@ fun SettingsScreen(vm: MainViewModel, onBack: () -> Unit) {
                         sub = stringResource(R.string.resolution_hint), last = true,
                     ) { value -> vm.updateSettings { it.copy(defaults = it.defaults.copy(videoHeight = value)) } }
                 }
-            }
-            item {
                 Group(R.string.group_playback) {
                     SwitchRow(R.string.setting_autoplay, R.string.setting_autoplay_sub, settings.autoPlayNext) { on -> vm.updateSettings { it.copy(autoPlayNext = on) } }
                     SwitchRow(R.string.setting_announcements, R.string.setting_announcements_sub, settings.pauseForAnnouncements) { on ->
@@ -164,8 +156,6 @@ fun SettingsScreen(vm: MainViewModel, onBack: () -> Unit) {
                     ) { value -> vm.updateSettings { it.copy(resumeRewindSec = value) } }
                     SwitchRow(R.string.skip_silence, R.string.skip_silence_sub, settings.skipSilence, last = true) { on -> vm.updateSettings { it.copy(skipSilence = on) } }
                 }
-            }
-            item {
                 Group(R.string.group_storage) {
                     val count = entries.count { it.isDone }
                     InfoRow(
@@ -192,8 +182,6 @@ fun SettingsScreen(vm: MainViewModel, onBack: () -> Unit) {
                     }
                     ActionRow(stringResource(R.string.delete_finished_now), stringResource(R.string.delete_finished_now_sub), last = true) { vm.deleteFinished() }
                 }
-            }
-            item {
                 Group(R.string.group_ytdlp) {
                     val channel = stringResource(if (settings.updateChannel == UpdateChannel.NIGHTLY) R.string.channel_nightly else R.string.channel_stable)
                     val checked = if (meta.lastCheckAt > 0) stringResource(R.string.ytdlp_checked, Format.relative(context, meta.lastCheckAt)) else stringResource(R.string.ytdlp_never_checked)
@@ -211,8 +199,6 @@ fun SettingsScreen(vm: MainViewModel, onBack: () -> Unit) {
                     SwitchRow(R.string.setting_auto_update, R.string.setting_auto_update_sub, settings.autoUpdate) { on -> vm.updateSettings { it.copy(autoUpdate = on) } }
                     SwitchRow(R.string.setting_fast_js, R.string.setting_fast_js_sub, settings.fastJsEngine, last = true) { on -> vm.updateSettings { it.copy(fastJsEngine = on) } }
                 }
-            }
-            item {
                 Group(R.string.group_about) {
                     val newer = appUpdate?.version
                     ButtonRow(
@@ -230,9 +216,8 @@ fun SettingsScreen(vm: MainViewModel, onBack: () -> Unit) {
                     InfoRow(stringResource(R.string.licenses), stringResource(R.string.licenses_body))
                     InfoRow(stringResource(R.string.legal_title), stringResource(R.string.legal_body), last = true)
                 }
-            }
         }
-        VerticalScrollbar(listState)
+        VerticalScrollbar(scroll)
         }
     }
 }

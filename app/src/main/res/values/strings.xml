@@ -40,6 +40,11 @@
     <!-- Download states -->
     <string name="state_queued">Waiting in line</string>
     <string name="state_waiting_network">Waiting for Wi-Fi</string>
+    <string name="state_waiting_connection">Waiting for a connection</string>
+    <string name="use_mobile_data">Use mobile data</string>
+    <string name="use_mobile_data_all">All over mobile data</string>
+    <string name="mobile_data_title">Load over mobile data</string>
+    <string name="mobile_data_sub">You are on mobile data. With “Wi-Fi only”, downloads wait for Wi-Fi — unless you switch this on.</string>
     <string name="progress_starting">Starting…</string>
     <string name="progress_preparing">Preparing…</string>
     <string name="progress_downloading">Downloading…</string>
@@ -199,7 +204,7 @@
     <string name="mixtape_add">On mixtape…</string>
     <string name="mixtape_on">On mixtape</string>
     <string name="mixtape_none">None</string>
-    <string name="drag_to_mixtape">Drop it on a mixtape</string>
+    <string name="drag_to_mixtape">Drop on a mixtape</string>
     <string name="added_to_mixtape">Added to “%s”</string>
     <string name="already_on_mixtape">Already on “%s”</string>
     <plurals name="mixtape_titles">

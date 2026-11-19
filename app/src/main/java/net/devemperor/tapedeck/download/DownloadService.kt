@@ -70,9 +70,11 @@ class DownloadService : LifecycleService() {
         goForeground()
         acquireLocks()
         lifecycleScope.launch {
-            combine(app.library.entries, app.settings.state, app.network.state, kick) { entries, settings, net, _ ->
-                Triple(entries, settings, net)
-            }.collect { (entries, settings, net) -> schedule(entries, settings, net) }
+            // Any change starts a round, which then reads the newest state itself: what combine hands over can
+            // lag behind a change the previous round just made (a download it set RUNNING still read as
+            // waiting), and a round on such a stale list cancelled the job it had just started.
+            combine(app.library.entries, app.settings.state, app.network.state, kick) { _, _, _, _ -> }
+                .collect { schedule(app.library.entries.value, app.settings.current, app.network.state.value) }
         }
         lifecycleScope.launch {
             while (true) {
@@ -86,6 +88,8 @@ class DownloadService : LifecycleService() {
         super.onStartCommand(intent, flags, startId)
         goForeground()
         stopping = false
+        // "Use mobile data" in the waiting notification.
+        if (intent?.action == ACTION_USE_MOBILE_DATA) app.downloads.allowMobileData()
         kick.value++
         return START_NOT_STICKY
     }
@@ -127,7 +131,6 @@ class DownloadService : LifecycleService() {
     private fun schedule(entries: List<Entry>, settings: AppSettings, net: NetState) {
         // The app was swiped away: start nothing new on the way out.
         if (closing) return
-        val networkOk = net.connected && (!settings.wifiOnly || net.unmetered)
         val byId = entries.associateBy { it.id }
 
         // RUNNING without a job here means the download was cut off (service restarted): queue it again.
@@ -138,7 +141,7 @@ class DownloadService : LifecycleService() {
         // Jobs whose entry was cancelled, deleted or sent back to wait for the network.
         jobs.entries.toList().forEach { (id, job) ->
             val entry = byId[id]
-            if (entry == null || entry.state != DownloadState.RUNNING || !networkOk) {
+            if (entry == null || entry.state != DownloadState.RUNNING || !net.allows(entry, settings.wifiOnly)) {
                 Engine.cancel(id)
                 job.cancel()
                 jobs.remove(id)
@@ -152,7 +155,7 @@ class DownloadService : LifecycleService() {
         val pending = entries.filter { it.state == DownloadState.QUEUED || it.state == DownloadState.WAITING_NETWORK }
             .sortedBy { it.createdAt }
         for (entry in pending) {
-            if (!networkOk) {
+            if (!net.allows(entry, settings.wifiOnly)) {
                 if (entry.state != DownloadState.WAITING_NETWORK) app.library.update(entry.id) { it.copy(state = DownloadState.WAITING_NETWORK) }
                 continue
             }
@@ -264,10 +267,9 @@ class DownloadService : LifecycleService() {
             app.settings.updateEngine { it.copy(quickJsNgWorks = false) }
         }
         val net = app.network.state.value
-        val networkOk = net.connected && (!settings.wifiOnly || net.unmetered)
         when {
             // The connection dropped: wait for it and continue from the partial file.
-            error.kind == ErrorKind.NETWORK && !networkOk ->
+            error.kind == ErrorKind.NETWORK && !net.allows(entry, settings.wifiOnly) ->
                 app.library.update(id) { it.copy(state = DownloadState.WAITING_NETWORK) }
             // A passing 403, or YouTube changed something: back into the queue for another try, and
             // fetch the newest yt-dlp meanwhile if the app is open (never in the background). The retry
@@ -346,8 +348,20 @@ class DownloadService : LifecycleService() {
                 val fraction = progress?.fraction
                 builder.setProgress(1000, ((fraction ?: 0f) * 1000).roundToInt(), fraction == null)
             }
-            waitingForNetwork -> builder.setContentTitle(getString(R.string.notif_waiting_network_title))
-                .setContentText(resources.getQuantityString(R.plurals.notif_waiting_count, queued, queued))
+            waitingForNetwork -> {
+                val wifiOnly = app.settings.current.wifiOnly
+                val forWifi = wifiOnly && entries.any { it.state == DownloadState.WAITING_NETWORK && !it.mobileData }
+                builder.setContentTitle(getString(if (forWifi) R.string.notif_waiting_network_title else R.string.state_waiting_connection))
+                    .setContentText(resources.getQuantityString(R.plurals.notif_waiting_count, queued, queued))
+                // On mobile data with "Wi-Fi only": load anyway, right from the notification.
+                if (forWifi && app.network.state.value.onMobileData) {
+                    val intent = Intent(this, DownloadService::class.java).setAction(ACTION_USE_MOBILE_DATA)
+                    val pending = PendingIntent.getForegroundService(
+                        this, 1, intent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+                    )
+                    builder.addAction(0, getString(R.string.use_mobile_data), pending)
+                }
+            }
             else -> builder.setContentTitle(getString(R.string.notif_preparing))
         }
         return builder.build()
@@ -389,6 +403,7 @@ class DownloadService : LifecycleService() {
 
     private companion object {
         const val TAG = "TapedeckDownload"
+        const val ACTION_USE_MOBILE_DATA = "net.devemperor.tapedeck.action.USE_MOBILE_DATA"
         const val MIN_FREE_BYTES = 150L * 1024 * 1024
     }
 }

@@ -4,8 +4,10 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
@@ -29,6 +31,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -45,6 +48,7 @@ import androidx.compose.material.icons.rounded.Headphones
 import androidx.compose.material.icons.rounded.LibraryMusic
 import androidx.compose.material.icons.rounded.Link
 import androidx.compose.material.icons.rounded.Movie
+import androidx.compose.material.icons.rounded.SignalCellularAlt
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -106,6 +110,8 @@ fun AddSheet(
     onRetryDetails: () -> Unit,
     mixtapes: List<Mixtape>,
     onMixtape: (String?, String?) -> Unit,
+    offerMobileData: Boolean,
+    onMobileData: (Boolean) -> Unit,
     onConfirm: () -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -124,7 +130,10 @@ fun AddSheet(
             if (formats) {
                 FormatsPage(state, onBack = onCloseFormats, onPick = onPickFormat, onRetry = onRetryDetails)
             } else {
-                OptionsPage(state, onUrl, onOptions, onWholePlaylist, onOpenFormats, onClearCustom, mixtapes, onMixtape, onConfirm)
+                OptionsPage(
+                    state, onUrl, onOptions, onWholePlaylist, onOpenFormats, onClearCustom, mixtapes, onMixtape,
+                    offerMobileData, onMobileData, onConfirm,
+                )
             }
         }
     }
@@ -140,6 +149,8 @@ private fun OptionsPage(
     onClearCustom: () -> Unit,
     mixtapes: List<Mixtape>,
     onMixtape: (String?, String?) -> Unit,
+    offerMobileData: Boolean,
+    onMobileData: (Boolean) -> Unit,
     onConfirm: () -> Unit,
 ) {
     run {
@@ -280,6 +291,10 @@ private fun OptionsPage(
 
             MixtapeChoice(state, mixtapes, onMixtape)
 
+            AnimatedVisibility(offerMobileData, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
+                MobileDataRow(state.mobileData, onMobileData)
+            }
+
             Spacer(Modifier.height(18.dp))
             Button(
                 onClick = onConfirm,
@@ -296,6 +311,27 @@ private fun OptionsPage(
                     style = MaterialTheme.typography.titleMedium,
                 )
             }
+        }
+    }
+}
+
+/** On mobile data with "Wi-Fi only": a switch to load this download now instead of waiting for Wi-Fi. */
+@Composable
+private fun MobileDataRow(on: Boolean, onChange: (Boolean) -> Unit) {
+    Surface(
+        shape = MaterialTheme.shapes.medium,
+        color = if (on) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceContainerHigh,
+        modifier = Modifier.fillMaxWidth().padding(top = 14.dp).clip(MaterialTheme.shapes.medium).toggleable(on, onValueChange = onChange),
+    ) {
+        Row(Modifier.padding(start = 14.dp, end = 12.dp, top = 10.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Rounded.SignalCellularAlt, null, tint = MaterialTheme.colorScheme.secondary, modifier = Modifier.size(20.dp))
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text(stringResource(R.string.mobile_data_title), style = MaterialTheme.typography.titleSmall)
+                Text(stringResource(R.string.mobile_data_sub), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Spacer(Modifier.width(8.dp))
+            Switch(checked = on, onCheckedChange = null)
         }
     }
 }

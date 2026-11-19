@@ -170,6 +170,10 @@ fun TapedeckRoot(vm: MainViewModel) {
             onRetryDetails = vm::retryDetails,
             mixtapes = vm.mixtapes.collectAsStateWithLifecycle().value,
             onMixtape = vm::setSheetMixtape,
+            // With "Wi-Fi only" on mobile data, the sheet offers to load right away anyway.
+            offerMobileData = vm.settings.collectAsStateWithLifecycle().value.wifiOnly &&
+                vm.network.collectAsStateWithLifecycle().value.onMobileData,
+            onMobileData = vm::setSheetMobileData,
             onConfirm = {
                 askForNotifications()
                 vm.confirmSheet()

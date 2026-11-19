@@ -65,6 +65,8 @@ data class AddSheetState(
     val mixtapeId: String? = null,
     /** … or on a new one of this name (a playlist's own title, or one typed in). */
     val newMixtapeName: String? = null,
+    /** Load over mobile data although "Wi-Fi only" is on (offered while on mobile data). */
+    val mobileData: Boolean = false,
 ) {
     val link: String? get() = Links.extractUrl(url)
     val canStart: Boolean
@@ -88,6 +90,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val player = PlayerConnection(app)
     val entries: StateFlow<List<Entry>> = app.library.entries
     val live = app.downloads.live
+    val network = app.network.state
     val settings: StateFlow<AppSettings> = app.settings.state
     val engineStatus = Engine.status
     val engineVersion = Engine.version
@@ -256,6 +259,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     /** The sheet's "On mixtape" choice: none, an existing one, or a new one by name. */
     fun setSheetMixtape(mixtapeId: String?, newName: String?) = _sheet.update { it?.copy(mixtapeId = mixtapeId, newMixtapeName = newName) }
 
+    fun setSheetMobileData(on: Boolean) = _sheet.update { it?.copy(mobileData = on) }
+
     // ---- Mixtapes ----
 
     val mixtapes: StateFlow<List<Mixtape>> = app.library.mixtapes
@@ -342,13 +347,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         // The sheet's choice (Audio or Video included) is where the next download starts; a picked stream is not.
         app.settings.update { it.copy(defaults = sheet.options.asDefaults()) }
         val playlist = sheet.playlist
+        // The switch only shows on mobile data; switched on and then back on Wi-Fi, it no longer matters.
+        val mobileData = sheet.mobileData && settings.value.wifiOnly
         val requests = if (sheet.wholePlaylist && playlist != null) {
-            playlist.items.map { NewDownload(it.url, sheet.options.asDefaults(), it.title, it.uploader, it.thumbnailUrl, it.durationMs) }
+            playlist.items.map {
+                NewDownload(it.url, sheet.options.asDefaults(), it.title, it.uploader, it.thumbnailUrl, it.durationMs, mobileData)
+            }
         } else {
             listOf(
                 NewDownload(
                     link, sheet.options, sheet.preview?.title, sheet.preview?.author, sheet.preview?.thumbnailUrl,
-                    sheet.details?.durationMs ?: 0,
+                    sheet.details?.durationMs ?: 0, mobileData,
                 ),
             )
         }
@@ -376,6 +385,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun cancel(id: String) = app.downloads.delete(setOf(id))
 
     fun retry(id: String) = app.downloads.retry(id)
+
+    /** Waiting downloads go ahead over mobile data: one, or all of them (null). */
+    fun useMobileData(id: String? = null) = app.downloads.allowMobileData(id?.let(::setOf))
 
     /** Hides the entries at once; the files go only when the snackbar's "Undo" was not tapped. */
     fun delete(ids: Set<String>) {
