@@ -7,6 +7,8 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
@@ -22,6 +24,7 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -39,6 +42,7 @@ import net.devemperor.tapedeck.R
 
 enum class Screen { LIBRARY, PLAYER, SETTINGS }
 
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun TapedeckRoot(vm: MainViewModel) {
     var screen by rememberSaveable { mutableStateOf(Screen.LIBRARY) }
@@ -80,9 +84,13 @@ fun TapedeckRoot(vm: MainViewModel) {
         if (screen != Screen.LIBRARY) screen = Screen.LIBRARY else openMixtape = null
     }
 
+    // Covers and cassettes travel between screens (see SharedElements.kt).
+    SharedTransitionLayout(Modifier.fillMaxSize()) { CompositionLocalProvider(LocalSharedScope provides this) {
     Box(Modifier.fillMaxSize()) {
         LibraryScreen(
             vm,
+            playerOpen = screen == Screen.PLAYER,
+            openMixtape = openMixtape,
             onOpenPlayer = {
                 playerFullscreen = false
                 screen = Screen.PLAYER
@@ -97,15 +105,18 @@ fun TapedeckRoot(vm: MainViewModel) {
         // Kept for the slide-out, after openMixtape is already null.
         var shownMixtape by remember { mutableStateOf(openMixtape) }
         if (openMixtape != null) shownMixtape = openMixtape
+        // Screens move as long as the elements travelling with them (TRAVEL_MS), or the travel is cut short.
         AnimatedVisibility(
             openMixtape != null,
-            enter = slideInHorizontally { it } + fadeIn(),
-            exit = slideOutHorizontally { it } + fadeOut(),
+            enter = slideInHorizontally(travelSpec()) { it } + fadeIn(travelSpec()),
+            exit = slideOutHorizontally(travelSpec()) { it } + fadeOut(travelSpec()),
         ) {
             shownMixtape?.let { id ->
                 MixtapeScreen(
                     vm,
                     id,
+                    visibility = this,
+                    playerOpen = screen == Screen.PLAYER,
                     onBack = { openMixtape = null },
                     onOpenPlayer = {
                         playerFullscreen = false
@@ -120,9 +131,9 @@ fun TapedeckRoot(vm: MainViewModel) {
         }
         AnimatedVisibility(
             screen == Screen.PLAYER,
-            enter = slideInVertically { it } + fadeIn(),
-            exit = slideOutVertically { it } + fadeOut(),
-        ) { PlayerScreen(vm, startFullscreen = playerFullscreen, onClose = { screen = Screen.LIBRARY }) }
+            enter = slideInVertically(travelSpec()) { it } + fadeIn(travelSpec()),
+            exit = slideOutVertically(travelSpec()) { it } + fadeOut(travelSpec()),
+        ) { PlayerScreen(vm, startFullscreen = playerFullscreen, visibility = this, onClose = { screen = Screen.LIBRARY }) }
         AnimatedVisibility(
             screen == Screen.SETTINGS,
             enter = slideInHorizontally { it } + fadeIn(),
@@ -137,6 +148,7 @@ fun TapedeckRoot(vm: MainViewModel) {
         }
         SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = lift))
     }
+    } }
 
     sheet?.let { state ->
         AddSheet(

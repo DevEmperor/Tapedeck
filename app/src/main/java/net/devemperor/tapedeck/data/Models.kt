@@ -39,7 +39,14 @@ data class DownloadOptions(
 }
 
 @Serializable
-data class Chapter(val title: String, val startMs: Long)
+data class Chapter(val title: String, val startMs: Long) {
+    /** yt-dlp fills gaps between real chapters with "<Untitled Chapter 2>"; those are not shown. */
+    val isPlaceholder: Boolean get() = title.isBlank() || PLACEHOLDER.matches(title)
+
+    private companion object {
+        val PLACEHOLDER = Regex("""^<Untitled Chapter \d+>$""")
+    }
+}
 
 @Serializable
 data class Entry(

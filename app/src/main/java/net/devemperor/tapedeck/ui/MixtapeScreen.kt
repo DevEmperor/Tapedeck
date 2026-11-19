@@ -1,6 +1,7 @@
 package net.devemperor.tapedeck.ui
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -64,6 +65,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.pluralStringResource
@@ -96,9 +99,29 @@ private fun mixtapeProgress(tape: Mixtape, state: PlayerUiState): Float {
     return (index + 0.5f) / tape.entryIds.size
 }
 
+/** A mixtape's reels turn while it plays, as fast as it plays. */
+private fun mixtapeVelocity(tape: Mixtape, state: PlayerUiState): Float =
+    if (state.isPlaying && state.mixtapeId == tape.id) ReelSpeed.PLAY * state.speed else 0f
+
+/** A cassette on the shelf. While its mixtape is open it has travelled to the top of that page, and comes back on return. */
+@Composable
+private fun ShelfCassette(tape: Mixtape, state: PlayerUiState, travelling: Boolean) {
+    Box(Modifier.fillMaxWidth().aspectRatio(1.58f)) {
+        AnimatedVisibility(!travelling, enter = fadeIn(travelSpec()), exit = fadeOut(travelSpec())) {
+            Cassette(
+                tape.name,
+                mixtapeColor(tape.color),
+                Modifier.sharedTransition(SharedKeys.tape(tape.id), this).fillMaxWidth().shadow(6.dp, MaterialTheme.shapes.small),
+                velocity = mixtapeVelocity(tape, state),
+                progress = mixtapeProgress(tape, state),
+            )
+        }
+    }
+}
+
 /** The mixtapes as cassettes on a shelf, above the library; their reels turn while one of them plays. */
 @Composable
-fun MixtapeShelf(vm: MainViewModel, entries: List<Entry>, state: PlayerUiState, onOpen: (String) -> Unit) {
+fun MixtapeShelf(vm: MainViewModel, entries: List<Entry>, state: PlayerUiState, openMixtape: String?, onOpen: (String) -> Unit) {
     val mixtapes by vm.mixtapes.collectAsStateWithLifecycle()
     var creating by remember { mutableStateOf(false) }
     val byId = remember(entries) { entries.associateBy { it.id } }
@@ -112,13 +135,7 @@ fun MixtapeShelf(vm: MainViewModel, entries: List<Entry>, state: PlayerUiState, 
                 Column(
                     Modifier.width(156.dp).clip(MaterialTheme.shapes.medium).clickable { onOpen(tape.id) }.padding(4.dp),
                 ) {
-                    Cassette(
-                        tape.name,
-                        mixtapeColor(tape.color),
-                        Modifier.fillMaxWidth().shadow(6.dp, MaterialTheme.shapes.small),
-                        spinning = state.isPlaying && state.mixtapeId == tape.id,
-                        progress = mixtapeProgress(tape, state),
-                    )
+                    ShelfCassette(tape, state, travelling = openMixtape == tape.id)
                     Spacer(Modifier.height(6.dp))
                     Text(
                         mixtapeSummary(tape, byId),
@@ -144,7 +161,15 @@ fun MixtapeShelf(vm: MainViewModel, entries: List<Entry>, state: PlayerUiState, 
  * reorder, × to take one off (the download stays in the library).
  */
 @Composable
-fun MixtapeScreen(vm: MainViewModel, mixtapeId: String, onBack: () -> Unit, onOpenPlayer: () -> Unit, onOpenFullscreen: () -> Unit) {
+fun MixtapeScreen(
+    vm: MainViewModel,
+    mixtapeId: String,
+    visibility: AnimatedVisibilityScope?,
+    playerOpen: Boolean,
+    onBack: () -> Unit,
+    onOpenPlayer: () -> Unit,
+    onOpenFullscreen: () -> Unit,
+) {
     val mixtapes by vm.mixtapes.collectAsStateWithLifecycle()
     val entries by vm.entries.collectAsStateWithLifecycle()
     val pending by vm.pendingDeletes.collectAsStateWithLifecycle()
@@ -175,6 +200,8 @@ fun MixtapeScreen(vm: MainViewModel, mixtapeId: String, onBack: () -> Unit, onOp
     }
 
     Box(Modifier.fillMaxSize().blockTouchesBelow().background(MaterialTheme.colorScheme.background)) {
+        // The page glows in its cassette's colour from the top.
+        Box(Modifier.fillMaxWidth().height(520.dp).background(Brush.verticalGradient(listOf(color.copy(alpha = 0.32f), Color.Transparent))))
         Column(Modifier.fillMaxSize()) {
             Row(Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 8.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, stringResource(R.string.back)) }
@@ -212,8 +239,8 @@ fun MixtapeScreen(vm: MainViewModel, mixtapeId: String, onBack: () -> Unit, onOp
                         Cassette(
                             tape.name,
                             color,
-                            Modifier.fillMaxWidth(0.78f).shadow(16.dp, MaterialTheme.shapes.medium),
-                            spinning = state.isPlaying && state.mixtapeId == tape.id,
+                            Modifier.sharedTransition(SharedKeys.tape(tape.id), visibility).fillMaxWidth(0.78f).shadow(16.dp, MaterialTheme.shapes.medium),
+                            velocity = mixtapeVelocity(tape, state),
                             progress = mixtapeProgress(tape, state),
                         )
                         Spacer(Modifier.height(14.dp))
@@ -332,8 +359,17 @@ fun MixtapeScreen(vm: MainViewModel, mixtapeId: String, onBack: () -> Unit, onOp
             // The mini player as in the library, above the navigation bar.
             val current = state.entryId?.let { byId[it] }
             Column(Modifier.fillMaxWidth().navigationBarsPadding()) {
-                AnimatedVisibility(current != null, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
-                    current?.let { MiniPlayer(it, vm, state.isPlaying, state.durationMs, onOpenPlayer, onOpenFullscreen) }
+                AnimatedVisibility(
+                    current != null && !playerOpen,
+                    enter = expandVertically(travelSpec()) + fadeIn(travelSpec()),
+                    exit = shrinkVertically(travelSpec()) + fadeOut(travelSpec()),
+                ) {
+                    current?.let {
+                        MiniPlayer(
+                            it, vm, state.isPlaying, state.durationMs, onOpenPlayer, onOpenFullscreen,
+                            thumbnailModifier = Modifier.sharedTransition(SharedKeys.artwork(it.id), this),
+                        )
+                    }
                 }
             }
         }

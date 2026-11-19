@@ -30,6 +30,7 @@
         <item quantity="other">Deleted in %d days</item>
     </plurals>
     <string name="engine_updating">Updating yt-dlp…</string>
+    <string name="engine_preparing">Threading the tape: getting Python and yt-dlp ready…</string>
     <string name="engine_failed">yt-dlp could not be started. Reinstalling Tapedeck usually helps.</string>
 
     <!-- Download states -->
@@ -160,6 +161,8 @@
     <string name="fullscreen">Full screen</string>
     <string name="fullscreen_exit">Leave full screen</string>
     <string name="chapters">Chapters</string>
+    <string name="show_cover">Show the cover</string>
+    <string name="show_cassette">Show as cassette</string>
     <string name="playback_title">Playback</string>
     <string name="playback_speed">Speed</string>
     <string name="playback_repeat">Repeat</string>

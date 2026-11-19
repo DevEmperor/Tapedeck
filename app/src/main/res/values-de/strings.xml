@@ -29,6 +29,7 @@
         <item quantity="other">Wird in %d Tagen gelöscht</item>
     </plurals>
     <string name="engine_updating">yt-dlp wird aktualisiert…</string>
+    <string name="engine_preparing">Band wird eingelegt: Python und yt-dlp werden vorbereitet…</string>
     <string name="engine_failed">yt-dlp konnte nicht starten. Meist hilft es, Tapedeck neu zu installieren.</string>
 
     <!-- Download states -->
@@ -159,6 +160,8 @@
     <string name="fullscreen">Vollbild</string>
     <string name="fullscreen_exit">Vollbild beenden</string>
     <string name="chapters">Kapitel</string>
+    <string name="show_cover">Cover zeigen</string>
+    <string name="show_cassette">Als Kassette zeigen</string>
     <string name="playback_title">Wiedergabe</string>
     <string name="playback_speed">Tempo</string>
     <string name="playback_repeat">Wiederholen</string>

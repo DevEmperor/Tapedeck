@@ -79,6 +79,7 @@ stopped.
     <td align="center"><img src="docs/images/mixtape.png" width="190" alt="The mixtape Road trip: a teal cassette, Play and Shuffle, and its three films in order with drag handles; the first one is playing"></td>
     <td align="center"><img src="docs/images/mixtape-add.png" width="190" alt="Putting a download on mixtapes: tick boxes for Blender Open Movies and Road trip, or start a new mixtape"></td>
     <td align="center"><img src="docs/images/playback.png" width="190" alt="The playback menu in the player: speed from 0.75× to 2×, repeat off, all or this one, shuffle and skip silence"></td>
+    <td align="center"><img src="docs/images/deck.png" width="190" alt="Audio as a cassette in a tape deck: the label shows the title, a tape counter at 1:49, the play light on, and the background tinted in the mixtape's colour"></td>
   </tr>
 </table>
 
@@ -165,6 +166,21 @@ stopped.
   of its own name, in the playlist's order.
 - Songs on a mixtape are never removed by the automatic clean-up. Deleting a mixtape keeps its downloads.
 - In **Android Auto**, every mixtape is a folder; picking a song plays the mixtape from there.
+
+### A tape deck to look at
+
+- **Reels that turn**: a little cassette window in the mini player turns while something plays — faster
+  at 1.5× — and its tape winds on with the position. They start up and run down like a real deck.
+- **Cassette deck**: tap the cover in the player (or the small cassette button on it) and audio plays as a
+  cassette behind the smoked-glass door of a deck, with a tape counter and a play light. Scrub the seek
+  bar and the reels spool fast forward or back; crossing into another chapter ticks under your finger.
+- **Downloads as tape** running from one reel onto the other, and a click when one lands in the library,
+  where its card lights up for a moment.
+- **Covers travel**: the mini player's cover grows into the player, a cassette on the shelf flies to the
+  top of its mixtape — and back.
+- **The colour of what plays**: the player takes the cover's colour (or the mixtape's), and so does the
+  cassette in the deck.
+- On the very first start, the empty rack's cassette turns while Python and yt-dlp get ready.
 
 ### Keeping your phone tidy
 

@@ -2,7 +2,9 @@ package net.devemperor.tapedeck.ui
 
 import android.content.Intent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -88,7 +90,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -127,6 +132,8 @@ enum class LibraryFilter { ALL, AUDIO, VIDEO, NEW }
 @Composable
 fun LibraryScreen(
     vm: MainViewModel,
+    playerOpen: Boolean,
+    openMixtape: String?,
     onOpenPlayer: () -> Unit,
     onOpenFullscreen: () -> Unit,
     onOpenSettings: () -> Unit,
@@ -160,6 +167,25 @@ fun LibraryScreen(
         settings.librarySort,
     )
     val current = playerState.entryId?.let { id -> entries.firstOrNull { it.id == id } }
+
+    // A download finishing while the app is open: a click to feel, and its card lights up as it drops
+    // into the library. Not for what was already there when the screen came up.
+    val haptic = LocalHapticFeedback.current
+    val doneIds = remember(done) { done.mapTo(HashSet()) { it.id } }
+    var knownDone by remember { mutableStateOf<Set<String>?>(null) }
+    var arrived by remember { mutableStateOf<Set<String>>(emptySet()) }
+    LaunchedEffect(doneIds) {
+        val before = knownDone
+        knownDone = doneIds
+        if (before == null) return@LaunchedEffect
+        val now = System.currentTimeMillis()
+        val fresh = done.filter { it.id !in before && (now - (it.completedAt ?: 0)) < 15_000 }.mapTo(HashSet()) { it.id }
+        if (fresh.isEmpty()) return@LaunchedEffect
+        haptic.performHapticFeedback(HapticFeedbackType.Confirm)
+        arrived = fresh
+        delay(1_400)
+        arrived = emptySet()
+    }
 
     Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         LazyColumn(
@@ -196,7 +222,7 @@ fun LibraryScreen(
                 }
             }
             if (mixtapes.isNotEmpty() && query.isBlank()) {
-                item(key = "mixtapes") { MixtapeShelf(vm, visible, playerState, onOpen = onOpenMixtape) }
+                item(key = "mixtapes") { MixtapeShelf(vm, visible, playerState, openMixtape, onOpen = onOpenMixtape) }
             }
             if (done.isNotEmpty()) {
                 item(key = "filters") {
@@ -220,6 +246,7 @@ fun LibraryScreen(
                             }
                         },
                         vm = vm,
+                        arrived = entry.id in arrived,
                         modifier = Modifier.animateItem(),
                     )
                 }
@@ -232,7 +259,7 @@ fun LibraryScreen(
                     )
                 }
             } else if (downloads.isEmpty()) {
-                item(key = "empty") { EmptyState() }
+                item(key = "empty") { EmptyState(preparing = engine is Engine.Status.Starting || engine is Engine.Status.Updating) }
             }
         }
 
@@ -246,8 +273,19 @@ fun LibraryScreen(
                     contentColor = MaterialTheme.colorScheme.onPrimary,
                 )
             }
-            AnimatedVisibility(current != null, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
-                current?.let { MiniPlayer(it, vm, playerState.isPlaying, playerState.durationMs, onOpenPlayer, onOpenFullscreen) }
+            // Steps aside while the player (or a mixtape with its own mini player) is open, so its cover can
+            // travel into the player and back.
+            AnimatedVisibility(
+                current != null && !playerOpen && openMixtape == null,
+                enter = expandVertically(travelSpec()) + fadeIn(travelSpec()),
+                exit = shrinkVertically(travelSpec()) + fadeOut(travelSpec()),
+            ) {
+                current?.let {
+                    MiniPlayer(
+                        it, vm, playerState.isPlaying, playerState.durationMs, onOpenPlayer, onOpenFullscreen,
+                        thumbnailModifier = Modifier.sharedTransition(SharedKeys.artwork(it.id), this),
+                    )
+                }
             }
         }
     }
@@ -337,7 +375,7 @@ private fun EngineBanner(status: Engine.Status) {
                 }
                 if (!failed) {
                     Spacer(Modifier.height(10.dp))
-                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth().clip(CircleShape))
+                    TapeTransport(fraction = null, running = true)
                 }
             }
         }
@@ -619,7 +657,8 @@ private fun DownloadCard(
             }
             if (entry.state == DownloadState.RUNNING) {
                 Spacer(Modifier.height(12.dp))
-                TapeProgressBar(fraction = progress?.fraction)
+                // The download as tape running from one reel to the other.
+                TapeTransport(fraction = progress?.fraction, running = true)
             }
             if (failed && !entry.errorDetail.isNullOrBlank() && entry.errorKind == ErrorKind.UNKNOWN.name) {
                 Text(
@@ -677,13 +716,23 @@ private fun EntryCard(
     deleteAt: Long?,
     onPlay: () -> Unit,
     vm: MainViewModel,
+    arrived: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
     val uriHandler = LocalUriHandler.current
     var menu by remember { mutableStateOf(false) }
     var picking by remember { mutableStateOf(false) }
-    val background = if (isCurrent) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f) else Color.Transparent
+    // A download that just landed glows up for a moment.
+    val background by animateColorAsState(
+        when {
+            arrived -> MaterialTheme.colorScheme.primary.copy(alpha = 0.28f)
+            isCurrent -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f)
+            else -> Color.Transparent
+        },
+        tween(if (arrived) 250 else 900),
+        label = "entry-background",
+    )
     Box(modifier) {
         Row(
             Modifier.fillMaxWidth()
@@ -788,7 +837,15 @@ private fun Badge(text: String, color: Color) {
 }
 
 @Composable
-fun MiniPlayer(entry: Entry, vm: MainViewModel, isPlaying: Boolean, durationMs: Long, onOpen: () -> Unit, onOpenFullscreen: () -> Unit) {
+fun MiniPlayer(
+    entry: Entry,
+    vm: MainViewModel,
+    isPlaying: Boolean,
+    durationMs: Long,
+    onOpen: () -> Unit,
+    onOpenFullscreen: () -> Unit,
+    thumbnailModifier: Modifier = Modifier,
+) {
     var position by remember { mutableLongStateOf(vm.player.currentPosition()) }
     LaunchedEffect(isPlaying, entry.id) {
         while (true) {
@@ -797,6 +854,7 @@ fun MiniPlayer(entry: Entry, vm: MainViewModel, isPlaying: Boolean, durationMs: 
         }
     }
     val duration = durationMs.takeIf { it > 0 } ?: entry.durationMs
+    val speed = vm.player.state.collectAsStateWithLifecycle().value.speed
     Surface(
         color = MaterialTheme.colorScheme.surfaceContainerHigh,
         shape = RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp),
@@ -807,15 +865,24 @@ fun MiniPlayer(entry: Entry, vm: MainViewModel, isPlaying: Boolean, durationMs: 
         // A video opens straight in full screen on a double tap (a single tap then waits a moment for the second).
         Column(Modifier.combinedClickable(onClick = onOpen, onDoubleClick = if (entry.isVideo) onOpenFullscreen else null)) {
             Row(Modifier.padding(start = 14.dp, end = 6.dp, top = 12.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                Thumbnail(entry, Modifier.width(72.dp).aspectRatio(16f / 9f), showDuration = false, corner = 9.dp)
+                Thumbnail(entry, thumbnailModifier.width(72.dp).aspectRatio(16f / 9f), showDuration = false, corner = 9.dp)
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
                     Text(entry.title, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Text(
-                        Format.clock(position) + " / " + Format.clock(duration),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+                    Spacer(Modifier.height(3.dp))
+                    // A little cassette window: the reels turn while it plays, the tape winds on with the position.
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        ReelWindow(
+                            progress = if (duration > 0) position.toFloat() / duration else 0f,
+                            velocity = if (isPlaying) ReelSpeed.PLAY * speed else 0f,
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            Format.clock(position) + " / " + Format.clock(duration),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                 }
                 IconButton(onClick = { vm.player.seekBack() }) { Icon(Icons.Rounded.Replay10, stringResource(R.string.action_back_10)) }
                 Surface(shape = CircleShape, color = MaterialTheme.colorScheme.primary, modifier = Modifier.size(46.dp)) {
@@ -840,18 +907,29 @@ fun MiniPlayer(entry: Entry, vm: MainViewModel, isPlaying: Boolean, durationMs: 
 }
 
 @Composable
-private fun EmptyState() {
+private fun EmptyState(preparing: Boolean) {
     Column(
-        Modifier.fillMaxWidth().padding(horizontal = 40.dp, vertical = 64.dp),
+        Modifier.fillMaxWidth().padding(horizontal = 40.dp, vertical = 48.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Box(
-            Modifier.size(112.dp).background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f), CircleShape),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(CassetteIcon, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(56.dp))
+        // The first start unpacks Python and fetches yt-dlp: meanwhile the empty rack's cassette is
+        // threaded and its reels turn; once all is ready they run down.
+        Cassette(
+            "Tapedeck",
+            MaterialTheme.colorScheme.primary,
+            Modifier.width(200.dp).shadow(14.dp, RoundedCornerShape(14.dp)),
+            velocity = if (preparing) ReelSpeed.PLAY * 1.8f else 0f,
+        )
+        Spacer(Modifier.height(12.dp))
+        AnimatedVisibility(preparing, enter = fadeIn() + expandVertically(), exit = fadeOut() + shrinkVertically()) {
+            Text(
+                stringResource(R.string.engine_preparing),
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary,
+                textAlign = TextAlign.Center,
+            )
         }
-        Spacer(Modifier.height(24.dp))
+        Spacer(Modifier.height(16.dp))
         Text(stringResource(R.string.empty_title), style = MaterialTheme.typography.titleLarge)
         Spacer(Modifier.height(8.dp))
         Text(

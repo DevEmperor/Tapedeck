@@ -53,6 +53,8 @@ data class AppSettings(
     val fastJsEngine: Boolean = true,
     /** Offer a link found in the clipboard when the app is opened. */
     val watchClipboard: Boolean = true,
+    /** The player shows audio as a cassette in a tape deck instead of the cover (a tap switches). */
+    val cassetteView: Boolean = false,
 ) {
     val autoDeleteAfterDays: Int get() = autoDeleteDays.coerceIn(AUTO_DELETE_MIN_DAYS, AUTO_DELETE_MAX_DAYS)
 
