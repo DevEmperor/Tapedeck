@@ -96,9 +96,12 @@ class PlaybackService : MediaLibraryService() {
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaLibrarySession? = session
 
+    // Swiping Tapedeck away in the recent apps closes it completely, playback included. The position is
+    // saved, and the car's play button can still pick it up later (playback resumption).
     override fun onTaskRemoved(rootIntent: Intent?) {
         saveCurrent()
-        if (!isPlaybackOngoing) pauseAllPlayersAndStopSelf()
+        app.library.saveNow()
+        pauseAllPlayersAndStopSelf()
     }
 
     override fun onDestroy() {

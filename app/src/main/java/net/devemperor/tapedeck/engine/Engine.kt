@@ -16,6 +16,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import net.devemperor.tapedeck.BuildConfig
 import net.devemperor.tapedeck.data.Entry
 import net.devemperor.tapedeck.data.Settings
 import net.devemperor.tapedeck.data.Storage
@@ -164,12 +165,17 @@ object Engine {
         }
     }
 
-    suspend fun download(context: Context, entry: Entry, sponsorBlock: Boolean, onLine: (String) -> Unit): YoutubeDLResponse {
+    suspend fun download(context: Context, entry: Entry, settings: Settings, onLine: (String) -> Unit): YoutubeDLResponse {
         ensureInitialized(context)
         val dir = Storage.entryDir(context, entry.id).apply { mkdirs() }
         val request = YoutubeDLRequest(entry.url)
             .addOption("--cache-dir", cacheDir(context).absolutePath)
-            .addCommands(YtDlpArgs.download(entry.options, dir.absolutePath, sponsorBlock))
+            .addCommands(YtDlpArgs.download(entry.options, dir.absolutePath, settings.current.sponsorBlock))
+        // The library always passes its own QuickJS as an option; a custom command comes later on the command
+        // line, and yt-dlp keeps the last path given for a runtime, so this one wins.
+        val engine = jsEngine(context, settings)
+        if (engine != null) request.addCommands(listOf("--js-runtimes", "quickjs:${engine.absolutePath}"))
+        Log.d(TAG, "JavaScript: ${engine?.name ?: "bundled QuickJS"}")
         // Every attempt gets its own process id: youtubedl-android 0.18.1 leaves the id of a failed run in
         // its process map, so a retry under the entry's id would stop at once with "Process ID already exists".
         val processId = "${entry.id}#${System.nanoTime()}"
@@ -190,6 +196,34 @@ object Engine {
             .addCommands(YtDlpArgs.playlist())
         val response = withYtDlp { YoutubeDL.execute(request) }
         return InfoJson.parsePlaylist(response.out)
+    }
+
+    /**
+     * QuickJS-NG (libqjsng.so, see tools/fetch-quickjs-ng.sh) if it is switched on and runs on this phone,
+     * else null for the library's own QuickJS. The release binaries are static Linux builds; whether
+     * Android lets them run is checked once per app version with a tiny script.
+     */
+    private suspend fun jsEngine(context: Context, settings: Settings): File? {
+        if (!settings.current.fastJsEngine) return null
+        val binary = File(context.applicationInfo.nativeLibraryDir, "libqjsng.so").takeIf { it.exists() } ?: return null
+        val versionCode = BuildConfig.VERSION_CODE
+        val meta = settings.engine.value
+        if (meta.quickJsNgCheckedFor == versionCode) return binary.takeIf { meta.quickJsNgWorks }
+        val works = runInterruptible(Dispatchers.IO) { selfTest(binary) }
+        Log.i(TAG, "QuickJS-NG self-test: ${if (works) "ok" else "failed, using the bundled QuickJS"}")
+        settings.updateEngine { it.copy(quickJsNgCheckedFor = versionCode, quickJsNgWorks = works) }
+        return binary.takeIf { works }
+    }
+
+    private fun selfTest(binary: File): Boolean = try {
+        val process = ProcessBuilder(binary.absolutePath, "-e", "print(6 * 7)").redirectErrorStream(true).start()
+        val finished = process.waitFor(10, java.util.concurrent.TimeUnit.SECONDS)
+        val output = process.inputStream.bufferedReader().readText().trim()
+        if (!finished) process.destroy()
+        finished && process.exitValue() == 0 && output == "42"
+    } catch (e: Exception) {
+        Log.w(TAG, "QuickJS-NG does not start", e)
+        false
     }
 
     /** Entry id → process id of its running yt-dlp. */

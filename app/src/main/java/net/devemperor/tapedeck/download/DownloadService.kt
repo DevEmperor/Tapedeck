@@ -63,6 +63,7 @@ class DownloadService : LifecycleService() {
     private var wakeLock: PowerManager.WakeLock? = null
     private var wifiLock: WifiManager.WifiLock? = null
     private var stopping = false
+    private var closing = false
 
     override fun onCreate() {
         super.onCreate()
@@ -98,6 +99,22 @@ class DownloadService : LifecycleService() {
         stopSelf()
     }
 
+    /**
+     * Swiping Tapedeck away in the recent apps stops the downloads as well. They go back into the queue and
+     * continue from their partial files the next time the app is opened.
+     */
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        closing = true
+        jobs.keys.toList().forEach { id ->
+            Engine.cancel(id)
+            app.library.update(id) { if (it.state == DownloadState.RUNNING) it.copy(state = DownloadState.QUEUED) else it }
+        }
+        stopping = true
+        ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
+        stopSelf()
+        super.onTaskRemoved(rootIntent)
+    }
+
     override fun onDestroy() {
         jobs.values.forEach { it.cancel() }
         jobs.keys.forEach(Engine::cancel)
@@ -108,6 +125,8 @@ class DownloadService : LifecycleService() {
     }
 
     private fun schedule(entries: List<Entry>, settings: AppSettings, net: NetState) {
+        // The app was swiped away: start nothing new on the way out.
+        if (closing) return
         val networkOk = net.connected && (!settings.wifiOnly || net.unmetered)
         val byId = entries.associateBy { it.id }
 
@@ -158,7 +177,7 @@ class DownloadService : LifecycleService() {
             // (if opening the app could not, e.g. offline) — but only while the app is on screen.
             if (Engine.neverUpdated(app) && AppVisibility.foreground) Engine.update(app, app.settings)
             if (Storage.freeBytes(app) < MIN_FREE_BYTES) throw StorageFullException()
-            Engine.download(app, entry, app.settings.current.sponsorBlock) { line ->
+            Engine.download(app, entry, app.settings) { line ->
                 if (BuildConfig.DEBUG) Log.d(TAG, "${id.take(8)} $line")
                 if (tracker.onLine(line)) app.downloads.publish(id, tracker.current)
                 if (YtDlpOutput.isInfoJsonWritten(line)) lifecycleScope.launch(Dispatchers.IO) { applyEarlyInfo(id) }
@@ -234,6 +253,10 @@ class DownloadService : LifecycleService() {
             else -> DownloadError(ErrorKind.ENGINE, e.message)
         }
         val settings = app.settings.current
+        // QuickJS-NG passed its self-test but failed in earnest: back to the bundled QuickJS for this version.
+        if (e is YoutubeDLException && e.message?.contains("Error running QuickJS") == true && settings.fastJsEngine) {
+            app.settings.updateEngine { it.copy(quickJsNgWorks = false) }
+        }
         val net = app.network.state.value
         val networkOk = net.connected && (!settings.wifiOnly || net.unmetered)
         when {

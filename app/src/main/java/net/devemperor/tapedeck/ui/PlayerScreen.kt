@@ -3,7 +3,14 @@ package net.devemperor.tapedeck.ui
 import android.app.Activity
 import android.content.pm.ActivityInfo
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.displayCutout
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -26,6 +33,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.List
 import androidx.compose.material.icons.rounded.Forward30
 import androidx.compose.material.icons.rounded.Fullscreen
+import androidx.compose.material.icons.rounded.FullscreenExit
 import androidx.compose.material.icons.rounded.GraphicEq
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.Pause
@@ -115,7 +123,7 @@ fun PlayerScreen(vm: MainViewModel, onClose: () -> Unit) {
     var chaptersOpen by remember { mutableStateOf(false) }
 
     if (fullscreen && entry.isVideo) {
-        FullscreenVideo(controller, onExit = { fullscreen = false })
+        FullscreenVideo(vm, controller, entry, onExit = { fullscreen = false })
         return
     }
 
@@ -242,13 +250,23 @@ fun PlayerScreen(vm: MainViewModel, onClose: () -> Unit) {
 }
 
 @Composable
-private fun SeekBar(position: Long, duration: Long, onSeek: (Long) -> Unit) {
+private fun SeekBar(
+    position: Long,
+    duration: Long,
+    onSeek: (Long) -> Unit,
+    textColor: Color = MaterialTheme.colorScheme.onSurfaceVariant,
+    trackColor: Color = MaterialTheme.colorScheme.surfaceContainerHighest,
+    onDrag: () -> Unit = {},
+) {
     var dragging by remember { mutableStateOf<Float?>(null) }
     val fraction = dragging ?: if (duration > 0) (position.toFloat() / duration).coerceIn(0f, 1f) else 0f
     Column(Modifier.fillMaxWidth()) {
         Slider(
             value = fraction,
-            onValueChange = { dragging = it },
+            onValueChange = {
+                dragging = it
+                onDrag()
+            },
             onValueChangeFinished = {
                 dragging?.let { onSeek((it * duration).toLong()) }
                 dragging = null
@@ -257,14 +275,14 @@ private fun SeekBar(position: Long, duration: Long, onSeek: (Long) -> Unit) {
             colors = SliderDefaults.colors(
                 thumbColor = MaterialTheme.colorScheme.primary,
                 activeTrackColor = MaterialTheme.colorScheme.primary,
-                inactiveTrackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                inactiveTrackColor = trackColor,
             ),
         )
         Row(Modifier.fillMaxWidth()) {
             val shown = dragging?.let { (it * duration).toLong() } ?: position
-            Text(Format.clock(shown), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(Format.clock(shown), style = MaterialTheme.typography.labelMedium, color = textColor)
             Spacer(Modifier.weight(1f))
-            Text("−" + Format.clock(duration - shown), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("−" + Format.clock(duration - shown), style = MaterialTheme.typography.labelMedium, color = textColor)
         }
     }
 }
@@ -302,8 +320,13 @@ private fun VideoSurface(controller: Player?, modifier: Modifier = Modifier) {
     )
 }
 
+/**
+ * Full-screen video with its own controls: a tap shows or hides them, and while the video plays they fade
+ * out by themselves after a few seconds. Title and the way back at the top, ⟲10 · play/pause · 30⟳ in the
+ * middle, the seek bar with the chapter and "leave full screen" at the bottom.
+ */
 @Composable
-private fun FullscreenVideo(controller: Player?, onExit: () -> Unit) {
+private fun FullscreenVideo(vm: MainViewModel, controller: Player?, entry: Entry, onExit: () -> Unit) {
     val activity = LocalContext.current as? Activity
     DisposableEffect(Unit) {
         val window = activity?.window
@@ -317,10 +340,104 @@ private fun FullscreenVideo(controller: Player?, onExit: () -> Unit) {
         }
     }
     BackHandler(onBack = onExit)
-    Box(Modifier.fillMaxSize().background(Color.Black).clickable(onClick = { controller?.let { if (it.isPlaying) it.pause() else it.play() } })) {
+
+    val state by vm.player.state.collectAsStateWithLifecycle()
+    var position by remember { mutableLongStateOf(vm.player.currentPosition()) }
+    LaunchedEffect(entry.id) {
+        while (true) {
+            position = vm.player.currentPosition()
+            delay(250)
+        }
+    }
+    val duration = state.durationMs.takeIf { it > 0 } ?: entry.durationMs
+    var controls by remember { mutableStateOf(true) }
+    var touchedAt by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    fun touched() {
+        touchedAt = System.currentTimeMillis()
+        controls = true
+    }
+    LaunchedEffect(controls, state.isPlaying, touchedAt) {
+        if (controls && state.isPlaying) {
+            delay(CONTROLS_TIMEOUT_MS)
+            controls = false
+        }
+    }
+
+    Box(
+        Modifier.fillMaxSize().background(Color.Black).clickable(
+            interactionSource = remember { MutableInteractionSource() },
+            indication = null,
+        ) { if (controls) controls = false else touched() },
+    ) {
         VideoSurface(controller, Modifier.fillMaxSize())
+        AnimatedVisibility(controls, enter = fadeIn(), exit = fadeOut()) {
+            Box(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.displayCutout)) {
+                Row(
+                    Modifier.align(Alignment.TopCenter).fillMaxWidth()
+                        .background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.7f), Color.Transparent)))
+                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    IconButton(onClick = onExit) { Icon(Icons.Rounded.KeyboardArrowDown, stringResource(R.string.close), tint = Color.White) }
+                    Spacer(Modifier.width(8.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(entry.title, style = MaterialTheme.typography.titleMedium, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        entry.uploader?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.7f), maxLines = 1) }
+                    }
+                }
+
+                Row(
+                    Modifier.align(Alignment.Center),
+                    horizontalArrangement = Arrangement.spacedBy(40.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    IconButton(onClick = { vm.player.seekBack(); touched() }, modifier = Modifier.size(64.dp)) {
+                        Icon(Icons.Rounded.Replay10, stringResource(R.string.action_back_10), tint = Color.White, modifier = Modifier.size(40.dp))
+                    }
+                    Surface(shape = CircleShape, color = MaterialTheme.colorScheme.primary, modifier = Modifier.size(80.dp)) {
+                        IconButton(onClick = { vm.player.togglePlay(); touched() }) {
+                            Icon(
+                                if (state.isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
+                                stringResource(if (state.isPlaying) R.string.pause else R.string.play),
+                                tint = MaterialTheme.colorScheme.onPrimary,
+                                modifier = Modifier.size(46.dp),
+                            )
+                        }
+                    }
+                    IconButton(onClick = { vm.player.seekForward(); touched() }, modifier = Modifier.size(64.dp)) {
+                        Icon(Icons.Rounded.Forward30, stringResource(R.string.action_forward_30), tint = Color.White, modifier = Modifier.size(40.dp))
+                    }
+                }
+
+                Column(
+                    Modifier.align(Alignment.BottomCenter).fillMaxWidth()
+                        .background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.75f))))
+                        .padding(start = 24.dp, end = 12.dp, bottom = 8.dp, top = 24.dp),
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            SeekBar(
+                                position, duration,
+                                onSeek = { vm.player.seekTo(it); touched() },
+                                textColor = Color.White.copy(alpha = 0.85f),
+                                trackColor = Color.White.copy(alpha = 0.25f),
+                                onDrag = ::touched,
+                            )
+                        }
+                        IconButton(onClick = onExit) {
+                            Icon(Icons.Rounded.FullscreenExit, stringResource(R.string.fullscreen_exit), tint = Color.White)
+                        }
+                    }
+                    currentChapter(entry.chapters, position)?.let {
+                        Text(it.title, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                }
+            }
+        }
     }
 }
+
+private const val CONTROLS_TIMEOUT_MS = 3_500L
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

@@ -85,6 +85,8 @@ with the screen off, through the car stereo or Android Auto, and always from whe
 - **Share and done.** Share a link from the YouTube app (or any of the
   [sites yt-dlp supports](https://github.com/yt-dlp/yt-dlp/blob/master/supportedsites.md)), or paste one.
   Tracking parameters are stripped, timestamps kept.
+- **Copied a link?** Open Tapedeck and it offers the YouTube link from your clipboard, with title and
+  picture — and tells you if that video is already in your library.
 - **Audio the way you need it.** **M4A** is YouTube's own AAC sound, saved without re-encoding; **MP3**
   is for car stereos that play USB sticks; **Original** keeps the stream as it is (mostly Opus).
   *High* quality, or *Data saver* at about 64 kbit/s — plenty for talks and podcasts.
@@ -102,6 +104,9 @@ with the screen off, through the car stereo or Android Auto, and always from whe
 - [yt-dlp](https://github.com/yt-dlp/yt-dlp) runs on the phone with its own Python, FFmpeg and QuickJS
   (the JavaScript runtime YouTube's player needs), thanks to
   [youtubedl-android](https://github.com/yausername/youtubedl-android).
+- **Faster preparation with [QuickJS-NG](https://github.com/quickjs-ng/quickjs)**, which solves YouTube's
+  JavaScript challenge about 28 % faster than the bundled QuickJS (3.7 s instead of 5.1 s per video on the
+  test emulator). Tapedeck checks once that it runs on your phone and falls back to QuickJS otherwise.
 - **Updated when you open the app** — from the nightly channel by default, where YouTube fixes land
   first; at most once an hour and never in the background.
 - When YouTube refuses a download or changes something, Tapedeck tries again by itself and fetches a
@@ -117,7 +122,10 @@ with the screen off, through the car stereo or Android Auto, and always from whe
 - **Pauses for navigation announcements** instead of talking over them.
 - **Keeps playing** the next download in the library's order — sort *oldest first* for a lecture series.
 - **Android Auto** shows *Continue*, *New* and *All downloads*.
-- Speed from 0.75× to 2×, **skip silence**, **chapters**, and full-screen video for when you are parked.
+- Speed from 0.75× to 2×, **skip silence**, **chapters**, and full-screen video with its own controls
+  for when you are parked.
+- **Swipe Tapedeck away** in the recent apps and everything stops — playback and downloads. Unfinished
+  downloads continue from where they were the next time you open it.
 
 ### Keeping your phone tidy
 
@@ -173,6 +181,10 @@ Tapedeck has no account, no analytics and no ads. It connects only to:
 - **SponsorBlock**, only if *Skip sponsor segments* is on (yt-dlp sends a short hash prefix of the
   video id).
 
+Tapedeck looks at the clipboard only when you open it (Android shows a short notice when it does), and
+keeps nothing of it but the time the last item was copied, so the same clip is not read twice. You can
+switch this off in the settings.
+
 Downloads stay in the app's own folder on your phone until you or the clean-up delete them.
 
 <br>
@@ -201,8 +213,8 @@ your law allows it. YouTube's terms of service restrict downloading. The screens
 ## 📄 License
 
 Tapedeck is free software under the [GNU General Public License v3.0](LICENSE) or later.
-It bundles yt-dlp (Unlicense), youtubedl-android (GPL-3.0), Python (PSF), FFmpeg (GPL), QuickJS (MIT),
-AndroidX Media3, Coil and OkHttp (Apache-2.0).
+It bundles yt-dlp (Unlicense), youtubedl-android (GPL-3.0), Python (PSF), FFmpeg (GPL), QuickJS and
+QuickJS-NG (MIT; fetched by `tools/fetch-quickjs-ng.sh`), AndroidX Media3, Coil and OkHttp (Apache-2.0).
 
 Questions or ideas? [Open an issue](https://github.com/DevEmperor/Tapedeck/issues) or write to
 contact@devemperor.net.

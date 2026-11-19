@@ -122,6 +122,9 @@ fun SettingsScreen(vm: MainViewModel, onBack: () -> Unit) {
                         items = (1..AppSettings.MAX_PARALLEL_DOWNLOADS).toList(),
                         label = { it.toString() },
                     ) { value -> vm.updateSettings { it.copy(parallelDownloads = value) } }
+                    SwitchRow(R.string.setting_clipboard, R.string.setting_clipboard_sub, settings.watchClipboard) { on ->
+                        vm.updateSettings { it.copy(watchClipboard = on) }
+                    }
                     SwitchRow(R.string.setting_sponsorblock, R.string.setting_sponsorblock_sub, settings.sponsorBlock, last = true) { on ->
                         vm.updateSettings { it.copy(sponsorBlock = on) }
                     }
@@ -179,6 +182,7 @@ fun SettingsScreen(vm: MainViewModel, onBack: () -> Unit) {
                         currentLabel = channel,
                     ) { value -> vm.updateSettings { it.copy(updateChannel = value) } }
                     SwitchRow(R.string.setting_auto_update, R.string.setting_auto_update_sub, settings.autoUpdate) { on -> vm.updateSettings { it.copy(autoUpdate = on) } }
+                    SwitchRow(R.string.setting_fast_js, R.string.setting_fast_js_sub, settings.fastJsEngine) { on -> vm.updateSettings { it.copy(fastJsEngine = on) } }
                     ActionRow(
                         stringResource(R.string.ytdlp_update_now), stringResource(R.string.ytdlp_update_now_sub), last = true,
                         trailing = { if (updating) CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp) },

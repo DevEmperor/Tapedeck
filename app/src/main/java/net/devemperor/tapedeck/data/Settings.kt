@@ -49,6 +49,10 @@ data class AppSettings(
     val autoUpdate: Boolean = true,
     /** Tapedeck is not on Play, so it looks on GitHub for a newer release itself (when opened). */
     val checkAppUpdates: Boolean = true,
+    /** QuickJS-NG instead of the bundled QuickJS for YouTube's JavaScript challenge (faster). */
+    val fastJsEngine: Boolean = true,
+    /** Offer a link found in the clipboard when the app is opened. */
+    val watchClipboard: Boolean = true,
 ) {
     val autoDeleteAfterDays: Int get() = autoDeleteDays.coerceIn(AUTO_DELETE_MIN_DAYS, AUTO_DELETE_MAX_DAYS)
 
@@ -70,6 +74,11 @@ data class EngineMeta(
     val lastAppCheckAt: Long = 0,
     /** A Tapedeck version whose hint the user put away with "Later"; the next one shows again. */
     val dismissedAppVersion: String? = null,
+    /** The app version whose QuickJS-NG self-test result is stored in [quickJsNgWorks]. */
+    val quickJsNgCheckedFor: Int = 0,
+    val quickJsNgWorks: Boolean = false,
+    /** When the clip last looked at was copied; only a newer one is read (Android shows a toast per read). */
+    val lastClipTimestamp: Long = 0,
 )
 
 class Settings(context: Context) {

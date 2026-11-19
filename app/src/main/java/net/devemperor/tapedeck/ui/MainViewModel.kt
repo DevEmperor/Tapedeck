@@ -1,6 +1,7 @@
 package net.devemperor.tapedeck.ui
 
 import android.app.Application
+import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.util.Log
@@ -46,11 +47,15 @@ data class AddSheetState(
     val playlist: Playlist? = null,
     val loadingPlaylist: Boolean = false,
     val playlistFailed: Boolean = false,
+    val alreadyInLibrary: Boolean = false,
 ) {
     val link: String? get() = Links.extractUrl(url)
     val canStart: Boolean
         get() = link != null && (!wholePlaylist || playlist?.items?.isNotEmpty() == true)
 }
+
+/** A YouTube link found in the clipboard, offered at the top of the library. */
+data class ClipOffer(val url: String, val preview: PreviewInfo? = null)
 
 sealed interface UiEvent {
     class Message(val render: (Context) -> String) : UiEvent
@@ -99,9 +104,66 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    /** "Add link" without a link takes the one last seen in the clipboard, if it is not downloaded already. */
     fun openSheet(url: String? = null) {
+        _clipOffer.value = null
         _sheet.value = AddSheetState(options = settings.value.defaults)
-        if (url != null) onUrlChanged(url)
+        val prefill = url ?: clipUrl?.takeIf { !inLibrary(it) }
+        if (prefill != null) onUrlChanged(prefill)
+    }
+
+    private val _clipOffer = MutableStateFlow<ClipOffer?>(null)
+    val clipOffer: StateFlow<ClipOffer?> = _clipOffer.asStateFlow()
+
+    /** The latest link (of any site) seen in the clipboard. */
+    private var clipUrl: String? = null
+
+    /**
+     * Called when the window gains focus — Android only lets the focused app read the clipboard. A clip is
+     * read once, when it is newer than the last one looked at (each read shows Android's "pasted" toast);
+     * nothing of it is stored but its timestamp. A YouTube link not in the library yet is offered.
+     */
+    fun checkClipboard(context: Context) {
+        if (!settings.value.watchClipboard || _sheet.value != null) return
+        val clipboard = context.getSystemService(ClipboardManager::class.java) ?: return
+        val description = clipboard.primaryClipDescription ?: return
+        val stamp = description.timestamp
+        if (stamp != 0L && stamp == app.settings.engine.value.lastClipTimestamp) return
+        app.settings.updateEngine { it.copy(lastClipTimestamp = stamp) }
+        if (!description.hasMimeType("text/*")) return
+        val text = clipboard.primaryClip?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.text?.toString() ?: return
+        considerClipText(text)
+    }
+
+    /** What happens with the clipboard's text; also the entry point of the debug-only test hook. */
+    fun considerClipText(text: String) {
+        val url = Links.extractUrl(text) ?: return
+        clipUrl = url
+        if (!Links.isYoutube(url) || inLibrary(url)) return
+        _clipOffer.value = ClipOffer(url)
+        viewModelScope.launch {
+            val preview = app.preview.fetch(Links.clean(url))
+            _clipOffer.update { if (it?.url == url) it.copy(preview = preview) else it }
+        }
+    }
+
+    fun acceptClipOffer() {
+        val offer = _clipOffer.value ?: return
+        openSheet(offer.url)
+    }
+
+    fun dismissClipOffer() {
+        _clipOffer.value = null
+    }
+
+    /** Whether the video behind [url] is already in the library (same YouTube id, or the same cleaned link). */
+    private fun inLibrary(url: String): Boolean {
+        val id = Links.videoId(url)
+        val clean = Links.clean(url)
+        return entries.value.any { entry ->
+            entry.id !in _pendingDeletes.value &&
+                ((id != null && Links.videoId(entry.url) == id) || entry.url == clean)
+        }
     }
 
     fun closeSheet() {
@@ -117,6 +179,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             it?.copy(
                 url = text, preview = null, loadingPreview = url != null, playlist = null, playlistFailed = false,
                 playlistId = url?.let(Links::playlistId), wholePlaylist = playlistOnly,
+                alreadyInLibrary = url != null && !playlistOnly && inLibrary(url),
             )
         }
         previewJob?.cancel()

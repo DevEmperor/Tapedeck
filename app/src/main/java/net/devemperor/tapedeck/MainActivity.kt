@@ -49,6 +49,11 @@ class MainActivity : ComponentActivity() {
         vm.takePendingInstallConfirmation()?.let(::startActivity)
     }
 
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus) vm.checkClipboard(this)
+    }
+
     override fun onStop() {
         if (!isChangingConfigurations) {
             AppVisibility.foreground = false
@@ -58,10 +63,16 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun handleIntent(intent: Intent?) {
+        // Emulator tests: Genymotion mirrors its clipboard to the host's, so tests hand a "copied" link in here.
+        if (BuildConfig.DEBUG) intent?.getStringExtra(DEBUG_CLIP)?.let(vm::considerClipText)
         if (intent?.action != Intent.ACTION_SEND) return
         val text = intent.getStringExtra(Intent.EXTRA_TEXT) ?: intent.getStringExtra(Intent.EXTRA_SUBJECT) ?: return
         vm.onShared(text)
         // A rotation must not hand the same link over twice.
         intent.action = null
+    }
+
+    private companion object {
+        const val DEBUG_CLIP = "tapedeck.debug.clip"
     }
 }

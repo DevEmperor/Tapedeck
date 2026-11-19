@@ -129,6 +129,7 @@
     <string name="action_back_10">10 Sekunden zurück</string>
     <string name="action_forward_30">30 Sekunden vor</string>
     <string name="fullscreen">Vollbild</string>
+    <string name="fullscreen_exit">Vollbild beenden</string>
     <string name="chapters">Kapitel</string>
     <string name="skip_silence_short">Stille überspringen</string>
     <string name="close">Schließen</string>
@@ -147,6 +148,12 @@
     <string name="setting_wifi_only">Nur über WLAN</string>
     <string name="setting_wifi_only_sub">Downloads warten auf WLAN und laufen dann von selbst weiter</string>
     <string name="setting_parallel">Gleichzeitige Downloads</string>
+    <string name="setting_clipboard">Kopierte Links anbieten</string>
+    <string name="setting_clipboard_sub">Hast du einen YouTube-Link kopiert, bietet Tapedeck ihn beim Öffnen zum Laden an. Gespeichert wird nur der Zeitpunkt des Kopierens.</string>
+    <string name="clip_title">Aus der Zwischenablage</string>
+    <string name="already_in_library">Schon in deiner Bibliothek – du kannst es trotzdem noch einmal laden.</string>
+    <string name="setting_fast_js">Schnellere JavaScript-Engine</string>
+    <string name="setting_fast_js_sub">QuickJS-NG statt des mitgelieferten QuickJS löst YouTubes Rätsel schneller. Schalte es aus, falls Downloads scheitern.</string>
     <string name="setting_sponsorblock">Sponsoren überspringen</string>
     <string name="setting_sponsorblock_sub">Schneidet Werbeeinblendungen, Eigenwerbung und „Abonnieren“-Hinweise aus neuen Downloads (SponsorBlock)</string>
     <string name="setting_autoplay">Weiterspielen</string>
@@ -212,7 +219,7 @@
     <string name="app_updated_body">Tippen zum Öffnen</string>
     <string name="source_code">Quellcode</string>
     <string name="licenses">Open Source</string>
-    <string name="licenses_body">yt-dlp (Unlicense), youtubedl-android (GPL-3.0), Python (PSF), FFmpeg (GPL), QuickJS (MIT), AndroidX Media3 (Apache-2.0), Coil (Apache-2.0), OkHttp (Apache-2.0). Tapedeck selbst steht unter GPL-3.0.</string>
+    <string name="licenses_body">yt-dlp (Unlicense), youtubedl-android (GPL-3.0), Python (PSF), FFmpeg (GPL), QuickJS und QuickJS-NG (MIT), AndroidX Media3 (Apache-2.0), Coil (Apache-2.0), OkHttp (Apache-2.0). Tapedeck selbst steht unter GPL-3.0.</string>
     <string name="legal_title">Bitte beachten</string>
     <string name="legal_body">Lade nur herunter, was du behalten darfst, etwa eigene Videos, freie Inhalte oder eine Privatkopie, wo das Recht sie erlaubt.</string>
 

@@ -39,6 +39,8 @@ import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.CloudDownload
+import androidx.compose.material.icons.rounded.ContentPaste
+import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.DoneAll
 import androidx.compose.material.icons.rounded.ErrorOutline
@@ -61,6 +63,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.HorizontalDivider
@@ -88,6 +91,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.pluralStringResource
@@ -97,6 +101,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import coil3.compose.AsyncImage
 import kotlinx.coroutines.delay
 import net.devemperor.tapedeck.Format
 import net.devemperor.tapedeck.R
@@ -164,6 +169,7 @@ fun LibraryScreen(vm: MainViewModel, onOpenPlayer: () -> Unit, onOpenSettings: (
             }
             item(key = "engine") { EngineBanner(engine) }
             item(key = "app-update") { AppUpdateBanner(vm) }
+            item(key = "clipboard") { ClipboardBanner(vm) }
             if (downloads.isNotEmpty()) {
                 item(key = "downloads-header") { SectionHeader(stringResource(R.string.section_downloads), downloads.size) }
                 items(downloads, key = { "d-" + it.id }) { entry ->
@@ -407,6 +413,55 @@ private fun AppUpdateBanner(vm: MainViewModel) {
                             }
                         }
                     }
+                }
+            }
+        }
+    }
+}
+
+/** A YouTube link that was copied before Tapedeck was opened: one tap to the download sheet. */
+@Composable
+private fun ClipboardBanner(vm: MainViewModel) {
+    val offer by vm.clipOffer.collectAsStateWithLifecycle()
+    var shown by remember { mutableStateOf(offer) }
+    if (offer != null) shown = offer
+    AnimatedVisibility(offer != null, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
+        val current = shown ?: return@AnimatedVisibility
+        Surface(
+            shape = MaterialTheme.shapes.large,
+            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
+        ) {
+            Row(Modifier.padding(start = 12.dp, top = 12.dp, bottom = 12.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    Modifier.width(88.dp).aspectRatio(16f / 9f).clip(MaterialTheme.shapes.small)
+                        .background(MaterialTheme.colorScheme.surfaceContainerHighest),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    val thumbnail = current.preview?.thumbnailUrl
+                    if (thumbnail != null) {
+                        AsyncImage(thumbnail, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                    } else {
+                        Icon(Icons.Rounded.ContentPaste, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        stringResource(R.string.clip_title),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                    Text(
+                        current.preview?.title ?: current.url,
+                        style = MaterialTheme.typography.titleSmall,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    IconButton(onClick = vm::dismissClipOffer) { Icon(Icons.Rounded.Close, stringResource(R.string.close)) }
+                    FilledIconButton(onClick = vm::acceptClipOffer) { Icon(Icons.Rounded.Download, stringResource(R.string.download)) }
                 }
             }
         }
