@@ -49,20 +49,38 @@ class ProgressTest {
     }
 
     @Test
-    fun `video progress never jumps back when the sound track starts`() {
+    fun `video progress counts picture and sound, and never stands at 100 percent too early`() {
         val tracker = ProgressTracker(MediaKind.VIDEO)
-        tracker.onLine("[info] x: Downloading 2 format(s): 136+140")
+        // yt-dlp's own words: one format, made of two streams.
+        tracker.onLine("[info] x: Downloading 1 format(s): 136+140")
         tracker.onLine("[download] Destination: /data/media.f136.mp4")
         tracker.onLine("[download] 100.0% of 50.00MiB at 5.00MiB/s ETA 00:00")
         val afterVideo = tracker.current.fraction!!
         assertEquals(0.85f, afterVideo, 0.001f)
+        assertEquals(1, tracker.current.part)
+        assertEquals(2, tracker.current.parts)
         tracker.onLine("[download] Destination: /data/media.f140.m4a")
         tracker.onLine("[download]  10.0% of 5.00MiB at 5.00MiB/s ETA 00:01")
         val duringAudio = tracker.current.fraction!!
-        assertTrue(duringAudio >= afterVideo)
+        assertTrue(duringAudio > afterVideo && duringAudio < 1f)
+        assertEquals(2, tracker.current.part)
+        assertEquals(0.1f, tracker.current.partFraction!!, 0.001f)
         tracker.onLine("[download] 100.0% of 5.00MiB at 5.00MiB/s ETA 00:00")
         assertEquals(1f, tracker.current.fraction!!, 0.001f)
         tracker.onLine("[Merger] Merging formats into \"/data/media.mp4\"")
         assertEquals(Phase.PROCESSING, tracker.current.phase)
+    }
+
+    @Test
+    fun `weighs the streams by their real sizes once yt-dlp names them`() {
+        val tracker = ProgressTracker(MediaKind.VIDEO)
+        tracker.onLine("[info] x: Downloading 1 format(s): 248+251")
+        tracker.setStreamSizes(listOf(60_000_000L, 20_000_000L))
+        tracker.onLine("[download] Destination: /data/media.f248.webm")
+        tracker.onLine("[download] 100.0% of 57.22MiB at 5.00MiB/s ETA 00:00")
+        assertEquals(0.75f, tracker.current.fraction!!, 0.001f)
+        tracker.onLine("[download] Destination: /data/media.f251.webm")
+        tracker.onLine("[download]  50.0% of 19.07MiB at 5.00MiB/s ETA 00:02")
+        assertEquals(0.875f, tracker.current.fraction!!, 0.001f)
     }
 }

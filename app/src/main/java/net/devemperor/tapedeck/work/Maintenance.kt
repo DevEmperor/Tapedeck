@@ -33,9 +33,9 @@ object Maintenance {
     }
 
     fun cleanUp(app: TapedeckApp): Int {
-        val victims = AutoDelete.victims(
-            app.library.entries.value, app.settings.current, System.currentTimeMillis(), NowPlaying.entryId, app.library.onMixtapes(),
-        )
+        val settings = app.settings.current
+        val protected = if (settings.protectMixtapes) app.library.onMixtapes() else emptySet()
+        val victims = AutoDelete.victims(app.library.entries.value, settings, System.currentTimeMillis(), NowPlaying.entryId, protected)
         if (victims.isNotEmpty()) {
             Log.i("TapedeckMaintenance", "auto-deleting ${victims.size} entries")
             app.downloads.delete(victims.map { it.id }.toSet())

@@ -26,6 +26,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -44,16 +45,31 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
+import coil3.compose.LocalPlatformContext
+import coil3.request.ImageRequest
+import coil3.request.allowHardware
 import net.devemperor.tapedeck.Format
 import net.devemperor.tapedeck.data.Entry
 import java.io.File
 
 /** Thumbnail with the length in the corner, like on YouTube, and an audio/video badge. */
 @Composable
-fun Thumbnail(entry: Entry, modifier: Modifier = Modifier, showDuration: Boolean = true, showKind: Boolean = true, corner: Dp = 12.dp) {
+fun Thumbnail(
+    entry: Entry,
+    modifier: Modifier = Modifier,
+    showDuration: Boolean = true,
+    showKind: Boolean = true,
+    corner: Dp = 12.dp,
+    /** A plain (not hardware) bitmap, so the picture also shows in a drag shadow; for draggable cards. */
+    software: Boolean = false,
+) {
     val shape = RoundedCornerShape(corner)
     Box(modifier.clip(shape).background(MaterialTheme.colorScheme.surfaceContainerHighest)) {
-        val model: Any? = entry.thumbnailFile?.let(::File)?.takeIf { it.exists() } ?: entry.thumbnailUrl
+        val file: Any? = entry.thumbnailFile?.let(::File)?.takeIf { it.exists() } ?: entry.thumbnailUrl
+        val context = LocalPlatformContext.current
+        val model = remember(file, software) {
+            if (software && file != null) ImageRequest.Builder(context).data(file).allowHardware(false).build() else file
+        }
         if (model != null) {
             AsyncImage(model = model, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
         } else {

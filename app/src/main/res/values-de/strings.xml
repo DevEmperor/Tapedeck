@@ -13,6 +13,10 @@
     <string name="sort_last_played">Zuletzt gehört</string>
     <string name="settings">Einstellungen</string>
     <string name="section_downloads">Downloads</string>
+    <string name="section_library">Bibliothek</string>
+    <string name="stream_picture">Bild</string>
+    <string name="stream_sound">Ton</string>
+    <string name="stream_part">Teil %1$d/%2$d</string>
     <string name="filter_all">Alle</string>
     <string name="filter_audio">Audio</string>
     <string name="filter_video">Video</string>
@@ -153,6 +157,7 @@
     <string name="now_playing">Läuft gerade</string>
     <string name="play">Abspielen</string>
     <string name="pause">Pause</string>
+    <string name="resume">Weiter</string>
     <string name="next">Weiter</string>
     <string name="previous">Zurück</string>
     <string name="action_back_10">10 Sekunden zurück</string>
@@ -193,9 +198,12 @@
     <string name="mixtape_add">Auf Mixtape…</string>
     <string name="mixtape_on">Auf Mixtape</string>
     <string name="mixtape_none">Keins</string>
+    <string name="drag_to_mixtape">Auf ein Mixtape fallen lassen</string>
+    <string name="added_to_mixtape">Zu „%s“ hinzugefügt</string>
+    <string name="already_on_mixtape">Schon auf „%s“</string>
     <plurals name="mixtape_titles">
-        <item quantity="one">%d Titel</item>
-        <item quantity="other">%d Titel</item>
+        <item quantity="one">%d Eintrag</item>
+        <item quantity="other">%d Einträge</item>
     </plurals>
     <string name="close">Schließen</string>
     <string name="back">Zurück</string>
@@ -245,6 +253,8 @@
     </plurals>
     <string name="setting_only_finished">Nur zu Ende Gehörtes</string>
     <string name="setting_only_finished_sub">Zählt ab dem Moment, in dem es zu Ende gehört wurde. Behaltene Downloads werden nie gelöscht.</string>
+    <string name="setting_protect_mixtapes">Mixtape-Einträge behalten</string>
+    <string name="setting_protect_mixtapes_sub">Einträge auf einem Mixtape werden nie automatisch gelöscht, auch nicht über „Alles Gehörte löschen“</string>
     <string name="delete_finished_now">Alles Gehörte löschen</string>
     <string name="delete_finished_now_sub">Entfernt alle zu Ende gehörten Downloads, außer behaltenen</string>
     <string name="ytdlp_version">Version</string>

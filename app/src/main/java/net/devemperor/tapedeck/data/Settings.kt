@@ -55,6 +55,8 @@ data class AppSettings(
     val watchClipboard: Boolean = true,
     /** The player shows audio as a cassette in a tape deck instead of the cover (a tap switches). */
     val cassetteView: Boolean = false,
+    /** Entries on a mixtape are never removed by the clean-up (nor by "Delete everything heard"). */
+    val protectMixtapes: Boolean = true,
 ) {
     val autoDeleteAfterDays: Int get() = autoDeleteDays.coerceIn(AUTO_DELETE_MIN_DAYS, AUTO_DELETE_MAX_DAYS)
 

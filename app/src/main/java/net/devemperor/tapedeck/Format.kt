@@ -32,7 +32,19 @@ object Format {
         Phase.PREPARING -> context.getString(R.string.progress_preparing)
         Phase.PROCESSING -> context.getString(R.string.progress_processing)
         Phase.DOWNLOADING -> buildList {
-            progress.fraction?.let { add("${(it * 100).roundToInt()} %") }
+            // Picture and sound come one after the other: say which one, with its own percentage
+            // (the bar shows both together).
+            val part = progress.partFraction
+            if (progress.parts > 1 && part != null) {
+                val name = when {
+                    progress.parts == 2 && progress.part == 1 -> context.getString(R.string.stream_picture)
+                    progress.parts == 2 -> context.getString(R.string.stream_sound)
+                    else -> context.getString(R.string.stream_part, progress.part, progress.parts)
+                }
+                add("$name ${(part * 100).roundToInt()} %")
+            } else {
+                progress.fraction?.let { add("${(it * 100).roundToInt()} %") }
+            }
             progress.speedBytesPerSec?.takeIf { it > 0 }?.let { add(context.getString(R.string.progress_speed, bytes(context, it))) }
             progress.etaSec?.takeIf { it > 0 }?.let { add(context.getString(R.string.progress_eta, clock(it * 1000))) }
         }.joinToString(" · ").ifEmpty { context.getString(R.string.progress_downloading) }

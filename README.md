@@ -64,7 +64,7 @@ stopped.
 
 <table>
   <tr>
-    <td align="center"><img src="docs/images/library.png" width="190" alt="The library: two mixtapes as cassettes on a shelf, then the downloads with thumbnails, source, length, format and size, and the mini player at the bottom"></td>
+    <td align="center"><img src="docs/images/library.png" width="190" alt="The library: a Mixtapes section with two cassettes, a Library section with its count, sorting and filters, the downloads with thumbnails, source, length, format and size, and the mini player at the bottom"></td>
     <td align="center"><img src="docs/images/share.png" width="190" alt="The new-download sheet after sharing a link: title and picture, audio or video, and the resolution"></td>
     <td align="center"><img src="docs/images/downloading.png" width="190" alt="A video downloading in 1080p with percent, speed and time left"></td>
     <td align="center"><img src="docs/images/player.png" width="190" alt="The player: cover, chapter, seek bar, back and forward 10 seconds, speed, skip silence and chapters"></td>
@@ -111,7 +111,9 @@ stopped.
   audio or video.
 - **Whole playlists** in one go: share a playlist and get every video, in order.
 - **A real download manager.** A queue with 1–5 downloads at a time, a progress bar with speed and time
-  left, a notification, and readable errors (unavailable, private, age-restricted, no space, …).
+  left — for a video it says whether the picture or the sound is coming in, and the bar weighs both by
+  their real sizes — a notification, and readable errors (unavailable, private, age-restricted, no
+  space, …).
 - **Wi-Fi only**, on by default: downloads wait for Wi-Fi and continue by themselves, picking up where
   they stopped.
 - **SponsorBlock**, optional: cuts sponsored parts, self-promotion and "subscribe" reminders out of new
@@ -160,31 +162,37 @@ stopped.
 - **Your own playlists, as cassettes.** Put downloads on mixtapes — music for the drive, a lecture
   series, the kids' favourites. They sit on a shelf above the library, each in its own colour, and their
   reels turn while one of them plays.
-- **One after the other**: *Play* runs a mixtape in its order, *Shuffle* mixes it, and with *Repeat* it
-  starts over. Drag a song by its handle to move it; a download can be on several mixtapes.
+- **One after the other**: *Play* runs a mixtape in its order (and turns into *Pause* / *Resume* while
+  it plays), *Shuffle* mixes it, and with *Repeat* it starts over. Drag an item by its handle to move it;
+  a download can be on several mixtapes.
+- **Drag onto a mixtape**: press and hold a card in the library, and a tray with every mixtape (and
+  *New mixtape*) slides in at the top — drop it there.
 - **Straight onto a mixtape** when downloading — and a whole YouTube playlist can become a new mixtape
   of its own name, in the playlist's order.
-- Songs on a mixtape are never removed by the automatic clean-up. Deleting a mixtape keeps its downloads.
-- In **Android Auto**, every mixtape is a folder; picking a song plays the mixtape from there.
+- What is on a mixtape is never removed by the automatic clean-up (a setting, on by default). Deleting a
+  mixtape keeps its downloads.
+- In **Android Auto**, every mixtape is a folder; picking an item plays the mixtape from there.
 
 ### A tape deck to look at
 
-- **Reels that turn**: a little cassette window in the mini player turns while something plays — faster
-  at 1.5× — and its tape winds on with the position. They start up and run down like a real deck.
+- **Reels that turn** on the shelf while a mixtape plays — faster at 1.5× — starting up and running down
+  like a real deck.
 - **Cassette deck**: tap the cover in the player (or the small cassette button on it) and audio plays as a
   cassette behind the smoked-glass door of a deck, with a tape counter and a play light. Scrub the seek
   bar and the reels spool fast forward or back; crossing into another chapter ticks under your finger.
-- **Downloads as tape** running from one reel onto the other, and a click when one lands in the library,
-  where its card lights up for a moment.
-- **Covers travel**: the mini player's cover grows into the player, a cassette on the shelf flies to the
-  top of its mixtape — and back.
+- **Downloads as tape** running from one reel onto the other; when one is done, its card slides down into
+  the library, turns into a library card and lights up for a moment, with a click to feel.
+- **Covers travel**: tap a video in the list or the mini player and its picture grows into the player;
+  a cassette on the shelf flies to the top of its mixtape — and back.
 - **The colour of what plays**: the player takes the cover's colour (or the mixtape's), and so does the
   cassette in the deck.
 - On the very first start, the empty rack's cassette turns while Python and yt-dlp get ready.
 
 ### Keeping your phone tidy
 
-- Library with search, filters (audio, video, new) and sorting; *new* and *heard* at a glance.
+- Clear sections — *Downloads*, *Mixtapes*, *Library* — with the library's sorting and filters (audio,
+  video, new) in its own head; search; *new* and *heard* at a glance; a scrollbar to jump through long
+  lists.
 - **Where is it from?** The logo of YouTube, Instagram, TikTok, X, Facebook, Reddit, SoundCloud, Vimeo,
   Twitch, Dailymotion, Bandcamp, Bilibili and a few more sits next to the channel name.
 - Delete with undo, **keep** a download to protect it, or delete everything heard.

@@ -12,6 +12,11 @@ data class LiveProgress(
     val speedBytesPerSec: Long? = null,
     val etaSec: Long? = null,
     val totalBytes: Long? = null,
+    /** Which of the separately downloaded streams is coming in (1-based; picture first, then sound). */
+    val part: Int = 0,
+    val parts: Int = 1,
+    /** 0..1 of that stream alone. */
+    val partFraction: Float? = null,
 )
 
 /** One parsed "[download]  42.0% of ~ 12.34MiB at 1.20MiB/s ETA 00:09" line. */
@@ -22,7 +27,8 @@ object YtDlpOutput {
     private val total = Regex("""\sof\s+~?\s*([\d.]+)\s*([KMGT]?i?B)\b""")
     private val speed = Regex("""\sat\s+([\d.]+)\s*([KMGT]?i?B)/s""")
     private val eta = Regex("""\sETA\s+(\d+(?::\d+)+)""")
-    private val formats = Regex("""^\[info] .*: Downloading (\d+) format\(s\)""")
+    // "[info] x: Downloading 1 format(s): 137+140" — one format made of two streams (picture + sound).
+    private val formats = Regex("""^\[info] .*: Downloading (\d+) format\(s\)(?::\s*(\S+))?""")
     private val postProcessors = listOf(
         "[ExtractAudio]", "[Merger]", "[VideoConvertor]", "[VideoRemuxer]", "[FixupM4a]", "[FixupM3u8]",
         "[FixupDuplicateMoov]", "[FixupTimestamp]", "[SponsorBlock]", "[ModifyChapters]", "[EmbedThumbnail]",
@@ -39,7 +45,12 @@ object YtDlpOutput {
         )
     }
 
-    fun formatCount(line: String): Int? = formats.find(line)?.groupValues?.get(1)?.toIntOrNull()
+    /** How many streams yt-dlp is about to download one after the other: the parts of "137+140", else the count. */
+    fun streamCount(line: String): Int? {
+        val match = formats.find(line) ?: return null
+        val selector = match.groupValues[2]
+        return if (selector.isNotEmpty()) selector.split('+').size else match.groupValues[1].toIntOrNull()
+    }
 
     fun isDestination(line: String) = line.startsWith("[download] Destination:")
 
@@ -73,33 +84,47 @@ object YtDlpOutput {
 
 /**
  * Turns yt-dlp's output into one steadily rising progress value. A video download fetches the
- * picture first and the sound second, each counting from 0 to 100 %; weighting them keeps the bar
- * from jumping back.
+ * picture first and the sound second, each counting from 0 to 100 %; weighting them by their sizes
+ * keeps the bar from jumping back or standing at 100 % while the sound still comes in.
  */
 class ProgressTracker(private val kind: MediaKind) {
-    private var formatCount = 1
+    private var streams = 1
     private var part = 0
     private var state = LiveProgress()
 
+    /** Sizes of the streams from yt-dlp's info file (written before the download), once known. */
+    @Volatile
+    private var sizes: List<Long>? = null
+
     val current: LiveProgress get() = state
+
+    fun setStreamSizes(list: List<Long?>) {
+        if (list.size > 1 && list.all { it != null && it > 0 }) sizes = list.map { it!! }
+    }
 
     /** Returns true when the visible state changed. */
     fun onLine(line: String): Boolean {
         val before = state
-        YtDlpOutput.formatCount(line)?.let { formatCount = it.coerceAtLeast(1) }
+        YtDlpOutput.streamCount(line)?.let { streams = it.coerceAtLeast(1) }
         when {
             YtDlpOutput.isDestination(line) -> {
                 part++
-                state = state.copy(phase = Phase.DOWNLOADING, speedBytesPerSec = null, etaSec = null)
+                state = state.copy(
+                    phase = Phase.DOWNLOADING, speedBytesPerSec = null, etaSec = null,
+                    part = part.coerceAtMost(streams), parts = streams, partFraction = 0f,
+                )
             }
             line.startsWith("[download]") -> YtDlpOutput.parseDownload(line)?.let { parsed ->
-                val fraction = overall(parsed.percent / 100f)
+                val partFraction = parsed.percent / 100f
                 state = state.copy(
                     phase = Phase.DOWNLOADING,
-                    fraction = maxOf(fraction, state.fraction ?: 0f),
+                    fraction = maxOf(overall(partFraction), state.fraction ?: 0f),
                     speedBytesPerSec = parsed.speedBytesPerSec ?: state.speedBytesPerSec,
                     etaSec = parsed.etaSec,
                     totalBytes = parsed.totalBytes ?: state.totalBytes,
+                    part = part.coerceIn(1, streams),
+                    parts = streams,
+                    partFraction = partFraction,
                 )
             }
             YtDlpOutput.isPostProcessing(line) ->
@@ -111,10 +136,15 @@ class ProgressTracker(private val kind: MediaKind) {
     }
 
     private fun overall(partFraction: Float): Float {
-        if (formatCount <= 1) return partFraction
-        val index = (part - 1).coerceIn(0, formatCount - 1)
-        // For video+audio the picture is by far the bigger part.
-        val weights = if (kind == MediaKind.VIDEO && formatCount == 2) listOf(0.85f, 0.15f) else List(formatCount) { 1f / formatCount }
+        if (streams <= 1) return partFraction
+        val index = (part - 1).coerceIn(0, streams - 1)
+        val known = sizes?.takeIf { it.size == streams }
+        val weights = when {
+            known != null -> known.map { it.toFloat() / known.sum() }
+            // Without sizes: for video+audio the picture is by far the bigger part.
+            kind == MediaKind.VIDEO && streams == 2 -> listOf(0.85f, 0.15f)
+            else -> List(streams) { 1f / streams }
+        }
         return weights.take(index).sum() + weights[index] * partFraction
     }
 }

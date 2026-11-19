@@ -277,6 +277,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun removeFromMixtape(mixtapeId: String, entryId: String) = app.library.removeFromMixtape(mixtapeId, entryId)
 
+    /** A download dropped on a mixtape in the drag tray: onto it, with a word on what happened. */
+    fun dropOnMixtape(mixtapeId: String, entryId: String) {
+        val tape = app.library.mixtape(mixtapeId) ?: return
+        if (entryId in tape.entryIds) {
+            message { it.getString(R.string.already_on_mixtape, tape.name) }
+        } else {
+            app.library.addToMixtape(mixtapeId, listOf(entryId))
+            message { it.getString(R.string.added_to_mixtape, tape.name) }
+        }
+    }
+
     fun reorderMixtape(mixtapeId: String, entryIds: List<String>) = app.library.reorderMixtape(mixtapeId, entryIds)
 
     fun playMixtape(tape: Mixtape, start: Entry? = null, shuffle: Boolean = false) =
@@ -384,7 +395,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun deleteFinished() {
-        val onMixtapes = app.library.onMixtapes()
+        val onMixtapes = if (settings.value.protectMixtapes) app.library.onMixtapes() else emptySet()
         val ids = entries.value.filter { it.isDone && it.finished && !it.keep && it.id !in onMixtapes }.map { it.id }.toSet()
         if (ids.isEmpty()) message { it.getString(R.string.nothing_finished) } else delete(ids)
     }

@@ -180,7 +180,7 @@ class DownloadService : LifecycleService() {
             Engine.download(app, entry, app.settings) { line ->
                 if (BuildConfig.DEBUG) Log.d(TAG, "${id.take(8)} $line")
                 if (tracker.onLine(line)) app.downloads.publish(id, tracker.current)
-                if (YtDlpOutput.isInfoJsonWritten(line)) lifecycleScope.launch(Dispatchers.IO) { applyEarlyInfo(id) }
+                if (YtDlpOutput.isInfoJsonWritten(line)) lifecycleScope.launch(Dispatchers.IO) { applyEarlyInfo(id, tracker) }
             }
             finish(id)
         } catch (e: CancellationException) {
@@ -199,9 +199,13 @@ class DownloadService : LifecycleService() {
         }
     }
 
-    /** As soon as yt-dlp has written its info file, the card shows the real title, channel and length. */
-    private fun applyEarlyInfo(id: String) {
+    /**
+     * As soon as yt-dlp has written its info file, the card shows the real title, channel and length, and
+     * the progress weighs picture and sound by their real sizes.
+     */
+    private fun applyEarlyInfo(id: String, tracker: ProgressTracker) {
         val info = readInfo(id) ?: return
+        tracker.setStreamSizes(info.streamSizes)
         app.library.update(id) { entry ->
             entry.copy(
                 title = info.title ?: entry.title,

@@ -21,6 +21,8 @@ data class MediaInfo(
     val width: Int? = null,
     val audioBitrate: Int?,
     val audioCodec: String?,
+    /** Sizes of the streams downloaded one after the other (picture, sound), where yt-dlp knows them. */
+    val streamSizes: List<Long?> = emptyList(),
 ) {
     /**
      * The resolution class people know ("1080p"), not the bare height: a 2.24:1 film in full HD is
@@ -77,6 +79,9 @@ object InfoJson {
             width = root.int("width"),
             audioBitrate = root.double("abr")?.toInt(),
             audioCodec = root.string("acodec")?.takeIf { it != "none" },
+            streamSizes = (root["requested_formats"] as? JsonArray).orEmpty().map { format ->
+                (format as? JsonObject)?.let { (it.double("filesize") ?: it.double("filesize_approx"))?.toLong() }
+            },
         )
     }
 

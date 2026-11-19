@@ -141,7 +141,9 @@ private fun ColumnScope.FormatList(
     // Languages only matter when there is more than one (dubbed YouTube videos).
     val showLanguage = audios.mapNotNull { it.language }.distinct().size > 1
 
-    Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp)) {
+    val scroll = rememberScrollState()
+    Box(Modifier.weight(1f, fill = false)) {
+    Column(Modifier.verticalScroll(scroll).padding(horizontal = 20.dp)) {
         if (kind == MediaKind.VIDEO) {
             if (muxed.isNotEmpty()) {
                 Section(Icons.Rounded.VideoLibrary, R.string.formats_muxed)
@@ -189,6 +191,8 @@ private fun ColumnScope.FormatList(
             }
         }
         Spacer(Modifier.height(8.dp))
+    }
+    VerticalScrollbar(scroll)
     }
 
     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))

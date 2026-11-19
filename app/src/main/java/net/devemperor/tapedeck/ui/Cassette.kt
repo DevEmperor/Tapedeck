@@ -45,6 +45,8 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.text.PlatformTextStyle
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -83,6 +85,9 @@ private val InkColor = Color(0xFF2B2622)
 private val WindowColor = Color(0xFF231F1C)
 private val TapeColor = Color(0xFF5B4535)
 private val HubRing = Color(0xFFD9D4CE)
+/** Where the label starts and the reel window begins, as parts of the cassette's height. */
+private const val LABEL_TOP = 0.08f
+private const val WINDOW_TOP = 0.32f
 private val DeckTop = Color(0xFF34313A)
 private val DeckBottom = Color(0xFF16141A)
 
@@ -119,18 +124,29 @@ fun Cassette(name: String, color: Color, modifier: Modifier = Modifier, velocity
     val wound by animateFloatAsState(progress.coerceIn(0f, 1f), tween(600), label = "tape")
     BoxWithConstraints(modifier.aspectRatio(1.58f)) {
         val w = maxWidth
+        val h = maxHeight
         Canvas(Modifier.fillMaxSize()) { drawCassette(color, angle.value, wound) }
-        // The name is written on the label, above the window, in the app's own type: it has to stay readable.
-        Text(
-            name,
-            color = InkColor,
-            fontSize = (w.value * 0.075f).sp,
-            fontWeight = FontWeight.SemiBold,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.align(Alignment.TopCenter).fillMaxWidth().offset(y = w * 0.085f).padding(horizontal = w * 0.12f),
-        )
+        // The name is written on the label, in the app's own type (it has to stay readable), centred in the
+        // strip between the label's top edge and the reel window — never touching the window.
+        Box(
+            Modifier.offset(y = h * LABEL_TOP + h * 0.015f).fillMaxWidth().height(h * (WINDOW_TOP - LABEL_TOP) - h * 0.03f)
+                .padding(horizontal = w * 0.12f),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                name,
+                color = InkColor,
+                style = TextStyle(
+                    fontSize = (w.value * 0.066f).sp,
+                    lineHeight = (w.value * 0.074f).sp,
+                    fontWeight = FontWeight.SemiBold,
+                    platformStyle = PlatformTextStyle(includeFontPadding = false),
+                ),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                textAlign = TextAlign.Center,
+            )
+        }
     }
 }
 
@@ -146,10 +162,10 @@ private fun DrawScope.drawCassette(color: Color, angle: Float, wound: Float) {
     }
 
     // Label with a coloured stripe and the window for the reels.
-    drawRoundRect(LabelColor, topLeft = Offset(w * 0.08f, h * 0.08f), size = Size(w * 0.84f, h * 0.58f), cornerRadius = CornerRadius(w * 0.035f))
-    drawRect(color.copy(alpha = 0.85f), topLeft = Offset(w * 0.08f, h * 0.555f), size = Size(w * 0.84f, h * 0.05f))
-    val window = Size(w * 0.5f, h * 0.24f)
-    val windowTopLeft = Offset((w - window.width) / 2, h * 0.29f)
+    drawRoundRect(LabelColor, topLeft = Offset(w * 0.08f, h * LABEL_TOP), size = Size(w * 0.84f, h * 0.58f), cornerRadius = CornerRadius(w * 0.035f))
+    drawRect(color.copy(alpha = 0.85f), topLeft = Offset(w * 0.08f, h * 0.575f), size = Size(w * 0.84f, h * 0.045f))
+    val window = Size(w * 0.5f, h * 0.22f)
+    val windowTopLeft = Offset((w - window.width) / 2, h * WINDOW_TOP)
     drawReelWindow(windowTopLeft, window, angle, wound, hub = w * 0.042f, full = w * 0.1f)
 
     // The bottom bridge where the head reads the tape.
@@ -195,22 +211,6 @@ private fun DrawScope.drawReel(centre: Offset, radius: Float, angle: Float) {
         }
     }
     drawCircle(HubRing, radius = radius, center = centre, style = Stroke(width = radius * 0.1f))
-}
-
-/**
- * The cassette's window with both reels on a strip of its cream label — small enough for the mini
- * player's time line, and still recognisable on a dark background.
- */
-@Composable
-fun ReelWindow(progress: Float, velocity: Float, modifier: Modifier = Modifier) {
-    val angle = rememberReelAngle(velocity)
-    val wound by animateFloatAsState(progress.coerceIn(0f, 1f), tween(600), label = "tape")
-    Canvas(modifier.size(width = 44.dp, height = 20.dp)) {
-        drawRoundRect(LabelColor, cornerRadius = CornerRadius(size.height * 0.28f))
-        val inset = size.height * 0.16f
-        val window = Size(size.width - inset * 2, size.height - inset * 2)
-        drawReelWindow(Offset(inset, inset), window, angle.value, wound, hub = window.height * 0.3f, full = window.height * 0.62f)
-    }
 }
 
 /**

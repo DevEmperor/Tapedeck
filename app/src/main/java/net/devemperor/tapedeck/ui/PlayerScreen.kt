@@ -41,6 +41,7 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.List
@@ -854,7 +855,9 @@ private fun ChapterSheet(entry: Entry, position: Long, onPick: (Chapter) -> Unit
     val current = currentChapter(entry.chapters, position)
     ModalBottomSheet(onDismissRequest = onDismiss) {
         Text(stringResource(R.string.chapters), style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp))
-        LazyColumn(Modifier.fillMaxWidth().navigationBarsPadding()) {
+        val chapterList = rememberLazyListState()
+        Box(Modifier.fillMaxWidth().navigationBarsPadding()) {
+        LazyColumn(Modifier.fillMaxWidth(), state = chapterList) {
             itemsIndexed(entry.chapters.filterNot { it.isPlaceholder }) { _, chapter ->
                 val isCurrent = chapter == current
                 Row(
@@ -874,6 +877,8 @@ private fun ChapterSheet(entry: Entry, position: Long, onPick: (Chapter) -> Unit
                     )
                 }
             }
+        }
+        VerticalScrollbar(chapterList)
         }
     }
 }

@@ -1,7 +1,12 @@
 package net.devemperor.tapedeck.ui
 
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.AnimatedVisibilityScope
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -37,6 +42,7 @@ import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.DragHandle
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.MoreVert
+import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Shuffle
 import androidx.compose.material3.AlertDialog
@@ -81,7 +87,7 @@ import net.devemperor.tapedeck.data.Entry
 import net.devemperor.tapedeck.data.Mixtape
 import net.devemperor.tapedeck.player.PlayerUiState
 
-/** "12 songs · 48:10": how much is on a mixtape. */
+/** "12 items · 48:10": how much is on a mixtape. */
 @Composable
 private fun mixtapeSummary(tape: Mixtape, byId: Map<String, Entry>): String {
     val count = tape.entryIds.size
@@ -92,7 +98,7 @@ private fun mixtapeSummary(tape: Mixtape, byId: Map<String, Entry>): String {
     ).joinToString(" · ")
 }
 
-/** How far a playing mixtape is: the song's place on it, for the tape winding from reel to reel. */
+/** How far a playing mixtape is: the item's place on it, for the tape winding from reel to reel. */
 private fun mixtapeProgress(tape: Mixtape, state: PlayerUiState): Float {
     if (state.mixtapeId != tape.id || tape.entryIds.isEmpty()) return 0f
     val index = tape.entryIds.indexOf(state.entryId).coerceAtLeast(0)
@@ -125,12 +131,11 @@ fun MixtapeShelf(vm: MainViewModel, entries: List<Entry>, state: PlayerUiState, 
     val mixtapes by vm.mixtapes.collectAsStateWithLifecycle()
     var creating by remember { mutableStateOf(false) }
     val byId = remember(entries) { entries.associateBy { it.id } }
-    Column(Modifier.padding(top = 6.dp, bottom = 10.dp)) {
-        Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(stringResource(R.string.mixtapes), style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+    Column(Modifier.padding(bottom = 6.dp)) {
+        SectionHeader(stringResource(R.string.mixtapes), mixtapes.size) {
             IconButton(onClick = { creating = true }) { Icon(Icons.Rounded.Add, stringResource(R.string.mixtape_new)) }
         }
-        LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        LazyRow(contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             items(mixtapes, key = { it.id }) { tape ->
                 Column(
                     Modifier.width(156.dp).clip(MaterialTheme.shapes.medium).clickable { onOpen(tape.id) }.padding(4.dp),
@@ -157,7 +162,7 @@ fun MixtapeShelf(vm: MainViewModel, entries: List<Entry>, state: PlayerUiState, 
 }
 
 /**
- * One mixtape: the cassette, Play and Shuffle, and its songs in order — dragged by the handle to
+ * One mixtape: the cassette, Play and Shuffle, and its items in order — dragged by the handle to
  * reorder, × to take one off (the download stays in the library).
  */
 @Composable
@@ -166,8 +171,10 @@ fun MixtapeScreen(
     mixtapeId: String,
     visibility: AnimatedVisibilityScope?,
     playerOpen: Boolean,
+    playerOrigin: String?,
     onBack: () -> Unit,
     onOpenPlayer: () -> Unit,
+    onOpenPlayerFrom: (String) -> Unit,
     onOpenFullscreen: () -> Unit,
 ) {
     val mixtapes by vm.mixtapes.collectAsStateWithLifecycle()
@@ -229,9 +236,10 @@ fun MixtapeScreen(
                 }
             }
 
+            Box(Modifier.weight(1f)) {
             LazyColumn(
                 state = listState,
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(bottom = 24.dp),
             ) {
                 item(key = "header") {
@@ -248,10 +256,28 @@ fun MixtapeScreen(
                         Spacer(Modifier.height(14.dp))
                         val playable = order.any { byId[it]?.isDone == true }
                         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            Button(onClick = { vm.playMixtape(tape) }, enabled = playable) {
-                                Icon(Icons.Rounded.PlayArrow, null)
-                                Spacer(Modifier.width(6.dp))
-                                Text(stringResource(R.string.play))
+                            // While this mixtape is the one in the player, the button pauses and resumes it.
+                            val loaded = state.mixtapeId == tape.id && state.entryId != null
+                            Button(
+                                onClick = { if (loaded) vm.player.togglePlay() else vm.playMixtape(tape) },
+                                enabled = playable,
+                                modifier = Modifier.animateContentSize(),
+                            ) {
+                                AnimatedContent(
+                                    targetState = when {
+                                        !loaded -> 0
+                                        state.isPlaying -> 1
+                                        else -> 2
+                                    },
+                                    transitionSpec = { (fadeIn() + scaleIn(initialScale = 0.8f)) togetherWith (fadeOut() + scaleOut(targetScale = 0.8f)) },
+                                    label = "mixtape-play",
+                                ) { mode ->
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(if (mode == 1) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, null)
+                                        Spacer(Modifier.width(6.dp))
+                                        Text(stringResource(when (mode) { 1 -> R.string.pause; 2 -> R.string.resume; else -> R.string.play }))
+                                    }
+                                }
                             }
                             FilledTonalButton(onClick = { vm.playMixtape(tape, shuffle = true) }, enabled = playable) {
                                 Icon(Icons.Rounded.Shuffle, null)
@@ -292,7 +318,7 @@ fun MixtapeScreen(
                             )
                             .clickable(enabled = entry.isDone) {
                                 vm.playMixtape(tape, start = entry)
-                                if (entry.isVideo) onOpenPlayer()
+                                if (entry.isVideo) onOpenPlayerFrom(entry.id)
                             }
                             .padding(vertical = 6.dp),
                         verticalAlignment = Alignment.CenterVertically,
@@ -333,7 +359,12 @@ fun MixtapeScreen(
                                 )
                             },
                         )
-                        Thumbnail(entry, Modifier.width(88.dp).aspectRatio(16f / 9f).alpha(if (entry.isDone) 1f else 0.5f), corner = 8.dp)
+                        val travels = playerOrigin == id
+                        TravellingThumbnail(
+                            entry, travels, away = travels && playerOpen,
+                            modifier = Modifier.width(88.dp).aspectRatio(16f / 9f).alpha(if (entry.isDone) 1f else 0.5f),
+                            corner = 8.dp,
+                        )
                         Spacer(Modifier.width(12.dp))
                         Column(Modifier.weight(1f)) {
                             Text(
@@ -355,6 +386,8 @@ fun MixtapeScreen(
                     }
                 }
             }
+            VerticalScrollbar(listState)
+            }
 
             // The mini player as in the library, above the navigation bar.
             val current = state.entryId?.let { byId[it] }
@@ -367,7 +400,7 @@ fun MixtapeScreen(
                     current?.let {
                         MiniPlayer(
                             it, vm, state.isPlaying, state.durationMs, onOpenPlayer, onOpenFullscreen,
-                            thumbnailModifier = Modifier.sharedTransition(SharedKeys.artwork(it.id), this),
+                            thumbnailModifier = if (playerOrigin == null) Modifier.sharedTransition(SharedKeys.artwork(it.id), this) else Modifier,
                         )
                     }
                 }

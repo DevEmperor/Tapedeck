@@ -83,6 +83,9 @@ class PlayerConnection(private val context: Context) {
         controller.setMediaItems(queue.map { MediaItems.from(it) }, 0, start)
         controller.prepare()
         controller.play()
+        // The controller already knows the new item; show it now, not only when the service confirms —
+        // so a player opened in the same moment shows the right one at once (and its picture can travel).
+        refresh()
     }
 
     fun playFromStart(entry: Entry, library: List<Entry>, settings: AppSettings) {
@@ -92,6 +95,7 @@ class PlayerConnection(private val context: Context) {
         controller.setMediaItems(queue.map { MediaItems.from(it) }, 0, 0)
         controller.prepare()
         controller.play()
+        refresh()
     }
 
     /**
@@ -114,6 +118,7 @@ class PlayerConnection(private val context: Context) {
         controller.setMediaItems(queue.map { MediaItems.from(it, mixtapeId = tape.id) }, index, position)
         controller.prepare()
         controller.play()
+        refresh()
     }
 
     fun setShuffle(on: Boolean) {

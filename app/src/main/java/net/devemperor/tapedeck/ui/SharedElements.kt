@@ -1,6 +1,14 @@
 package net.devemperor.tapedeck.ui
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.AnimatedVisibilityScope
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+import net.devemperor.tapedeck.data.Entry
 import androidx.compose.animation.BoundsTransform
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
@@ -45,6 +53,24 @@ fun Modifier.sharedTransition(key: String, visibility: AnimatedVisibilityScope?)
             boundsTransform = travel,
             resizeMode = SharedTransitionScope.ResizeMode.RemeasureToBounds,
         )
+    }
+}
+
+/**
+ * A list card's picture that can travel into the player: opened from this card, it flies up into the
+ * player ([away] while the player is open) and back into the card when the player closes.
+ */
+@Composable
+fun TravellingThumbnail(entry: Entry, travels: Boolean, away: Boolean, modifier: Modifier = Modifier, corner: Dp = 12.dp, software: Boolean = false) {
+    Box(modifier) {
+        AnimatedVisibility(!away, enter = fadeIn(travelSpec()), exit = fadeOut(travelSpec())) {
+            Thumbnail(
+                entry,
+                (if (travels) Modifier.sharedTransition(SharedKeys.artwork(entry.id), this) else Modifier).fillMaxSize(),
+                corner = corner,
+                software = software,
+            )
+        }
     }
 }
 

@@ -50,6 +50,14 @@ fun TapedeckRoot(vm: MainViewModel) {
     var playerFullscreen by rememberSaveable { mutableStateOf(false) }
     // An open mixtape lies between the library and the player: closing the player returns to it.
     var openMixtape by rememberSaveable { mutableStateOf<String?>(null) }
+    // Where the player was opened: a card in a list (its picture travels into the player and back) or,
+    // with null, the mini player.
+    var playerOrigin by rememberSaveable { mutableStateOf<String?>(null) }
+    fun openPlayer(origin: String?, fullscreen: Boolean = false) {
+        playerOrigin = origin
+        playerFullscreen = fullscreen
+        screen = Screen.PLAYER
+    }
     val sheet by vm.sheet.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
     val context = LocalContext.current
@@ -91,14 +99,10 @@ fun TapedeckRoot(vm: MainViewModel) {
             vm,
             playerOpen = screen == Screen.PLAYER,
             openMixtape = openMixtape,
-            onOpenPlayer = {
-                playerFullscreen = false
-                screen = Screen.PLAYER
-            },
-            onOpenFullscreen = {
-                playerFullscreen = true
-                screen = Screen.PLAYER
-            },
+            playerOrigin = playerOrigin,
+            onOpenPlayer = { openPlayer(origin = null) },
+            onOpenPlayerFrom = { openPlayer(origin = it) },
+            onOpenFullscreen = { openPlayer(origin = null, fullscreen = true) },
             onOpenSettings = { screen = Screen.SETTINGS },
             onOpenMixtape = { openMixtape = it },
         )
@@ -117,15 +121,11 @@ fun TapedeckRoot(vm: MainViewModel) {
                     id,
                     visibility = this,
                     playerOpen = screen == Screen.PLAYER,
+                    playerOrigin = playerOrigin,
                     onBack = { openMixtape = null },
-                    onOpenPlayer = {
-                        playerFullscreen = false
-                        screen = Screen.PLAYER
-                    },
-                    onOpenFullscreen = {
-                        playerFullscreen = true
-                        screen = Screen.PLAYER
-                    },
+                    onOpenPlayer = { openPlayer(origin = null) },
+                    onOpenPlayerFrom = { openPlayer(origin = it) },
+                    onOpenFullscreen = { openPlayer(origin = null, fullscreen = true) },
                 )
             }
         }
@@ -133,7 +133,14 @@ fun TapedeckRoot(vm: MainViewModel) {
             screen == Screen.PLAYER,
             enter = slideInVertically(travelSpec()) { it } + fadeIn(travelSpec()),
             exit = slideOutVertically(travelSpec()) { it } + fadeOut(travelSpec()),
-        ) { PlayerScreen(vm, startFullscreen = playerFullscreen, visibility = this, onClose = { screen = Screen.LIBRARY }) }
+        ) {
+            PlayerScreen(vm, startFullscreen = playerFullscreen, visibility = this, onClose = {
+                // Something else plays by now than the card it was opened from: the picture goes back to
+                // the mini player instead.
+                if (playerOrigin != null && playerOrigin != vm.player.state.value.entryId) playerOrigin = null
+                screen = Screen.LIBRARY
+            })
+        }
         AnimatedVisibility(
             screen == Screen.SETTINGS,
             enter = slideInHorizontally { it } + fadeIn(),

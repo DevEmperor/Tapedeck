@@ -2,8 +2,11 @@ package net.devemperor.tapedeck.ui
 
 import android.content.Intent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.Crossfade
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -18,6 +21,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
@@ -26,9 +30,14 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.windowInsetsTopHeight
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyItemScope
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -134,14 +143,20 @@ fun LibraryScreen(
     vm: MainViewModel,
     playerOpen: Boolean,
     openMixtape: String?,
+    /** The entry whose card opened the player (its picture travels), or null when the mini player did. */
+    playerOrigin: String?,
     onOpenPlayer: () -> Unit,
+    onOpenPlayerFrom: (String) -> Unit,
     onOpenFullscreen: () -> Unit,
     onOpenSettings: () -> Unit,
     onOpenMixtape: (String) -> Unit,
 ) {
     val entries by vm.entries.collectAsStateWithLifecycle()
     val mixtapes by vm.mixtapes.collectAsStateWithLifecycle()
-    val onMixtapes = remember(mixtapes) { mixtapes.flatMapTo(HashSet()) { it.entryIds } }
+    val settingsNow by vm.settings.collectAsStateWithLifecycle()
+    val onMixtapes = remember(mixtapes, settingsNow.protectMixtapes) {
+        if (settingsNow.protectMixtapes) mixtapes.flatMapTo(HashSet()) { it.entryIds } else emptySet()
+    }
     val live by vm.live.collectAsStateWithLifecycle()
     val settings by vm.settings.collectAsStateWithLifecycle()
     val pending by vm.pendingDeletes.collectAsStateWithLifecycle()
@@ -187,8 +202,51 @@ fun LibraryScreen(
         arrived = emptySet()
     }
 
-    Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+    // Dragging a download: the mixtape tray slides in at the top until the drag ends.
+    var dragActive by remember { mutableStateOf(false) }
+    var newMixtapeFor by remember { mutableStateOf<String?>(null) }
+
+    // A download and the library card it becomes are one item under one key: when the download
+    // finishes, the list slides it down to its place while the download card fades into the library card.
+    val libraryItem: @Composable LazyItemScope.(Entry) -> Unit = { entry ->
+        Box(Modifier.animateItem(placementSpec = spring(stiffness = Spring.StiffnessLow)).animateContentSize()) {
+            Crossfade(entry.isDone, animationSpec = tween(500), label = "library-item") { done ->
+                if (done) {
+                    EntryCard(
+                        entry = entry,
+                        isCurrent = entry.id == playerState.entryId,
+                        isPlaying = entry.id == playerState.entryId && playerState.isPlaying,
+                        deleteAt = AutoDelete.dueAt(entry, settings, onMixtapes),
+                        onPlay = {
+                            if (entry.id == playerState.entryId) onOpenPlayerFrom(entry.id) else {
+                                vm.play(entry)
+                                if (entry.isVideo) onOpenPlayerFrom(entry.id)
+                            }
+                        },
+                        vm = vm,
+                        arrived = entry.id in arrived,
+                        onDragStart = { dragActive = true },
+                        travels = playerOrigin == entry.id && openMixtape == null,
+                        playerOpen = playerOpen,
+                    )
+                } else {
+                    DownloadCard(
+                        entry = entry,
+                        progress = live[entry.id],
+                        onCancel = { vm.cancel(entry.id) },
+                        onRetry = { vm.retry(entry.id) },
+                        onDelete = { vm.delete(setOf(entry.id)) },
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 5.dp),
+                    )
+                }
+            }
+        }
+    }
+
+    val listState = rememberLazyListState()
+    Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).entryDragWatcher { dragActive = it }) {
         LazyColumn(
+            state = listState,
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(bottom = if (current != null) 190.dp else 110.dp),
         ) {
@@ -199,8 +257,6 @@ fun LibraryScreen(
                     onQuery = { query = it },
                     onSearch = { searching = true },
                     onCloseSearch = { searching = false; query = "" },
-                    sort = settings.librarySort,
-                    onSort = { sort -> vm.updateSettings { it.copy(librarySort = sort) } },
                     onSettings = onOpenSettings,
                 )
             }
@@ -210,21 +266,18 @@ fun LibraryScreen(
             item(key = "clipboard") { ClipboardBanner(vm) }
             if (downloads.isNotEmpty()) {
                 item(key = "downloads-header") { SectionHeader(stringResource(R.string.section_downloads), downloads.size) }
-                items(downloads, key = { "d-" + it.id }) { entry ->
-                    DownloadCard(
-                        entry = entry,
-                        progress = live[entry.id],
-                        onCancel = { vm.cancel(entry.id) },
-                        onRetry = { vm.retry(entry.id) },
-                        onDelete = { vm.delete(setOf(entry.id)) },
-                        modifier = Modifier.animateItem().padding(horizontal = 16.dp, vertical = 5.dp),
-                    )
-                }
+                items(downloads, key = { "i-" + it.id }) { entry -> libraryItem(entry) }
             }
             if (mixtapes.isNotEmpty() && query.isBlank()) {
                 item(key = "mixtapes") { MixtapeShelf(vm, visible, playerState, openMixtape, onOpen = onOpenMixtape) }
             }
             if (done.isNotEmpty()) {
+                // The library as a section of its own: count and sorting in its head, the filters right under it.
+                item(key = "library-header") {
+                    SectionHeader(stringResource(R.string.section_library), done.size) {
+                        SortButton(settings.librarySort) { sort -> vm.updateSettings { it.copy(librarySort = sort) } }
+                    }
+                }
                 item(key = "filters") {
                     FilterRow(filter, onFilter = { filter = it }, counts = mapOf(
                         LibraryFilter.ALL to done.size,
@@ -233,23 +286,7 @@ fun LibraryScreen(
                         LibraryFilter.NEW to done.count { it.isNew },
                     ))
                 }
-                items(shown, key = { "e-" + it.id }) { entry ->
-                    EntryCard(
-                        entry = entry,
-                        isCurrent = entry.id == playerState.entryId,
-                        isPlaying = entry.id == playerState.entryId && playerState.isPlaying,
-                        deleteAt = AutoDelete.dueAt(entry, settings, onMixtapes),
-                        onPlay = {
-                            if (entry.id == playerState.entryId) onOpenPlayer() else {
-                                vm.play(entry)
-                                if (entry.isVideo) onOpenPlayer()
-                            }
-                        },
-                        vm = vm,
-                        arrived = entry.id in arrived,
-                        modifier = Modifier.animateItem(),
-                    )
-                }
+                items(shown, key = { "i-" + it.id }) { entry -> libraryItem(entry) }
                 if (shown.isEmpty()) item(key = "no-match") {
                     Text(
                         stringResource(R.string.no_match),
@@ -262,6 +299,13 @@ fun LibraryScreen(
                 item(key = "empty") { EmptyState(preparing = engine is Engine.Status.Starting || engine is Engine.Status.Updating) }
             }
         }
+
+        VerticalScrollbar(listState, top = 72.dp, bottom = if (current != null) 170.dp else 96.dp)
+        // The list scrolls under the status bar; a strip of background keeps clock and icons readable.
+        Box(
+            Modifier.fillMaxWidth().windowInsetsTopHeight(WindowInsets.statusBars)
+                .background(MaterialTheme.colorScheme.background.copy(alpha = 0.94f)),
+        )
 
         Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().navigationBarsPadding()) {
             Box(Modifier.fillMaxWidth().padding(end = 16.dp, bottom = 12.dp), contentAlignment = Alignment.CenterEnd) {
@@ -283,10 +327,24 @@ fun LibraryScreen(
                 current?.let {
                     MiniPlayer(
                         it, vm, playerState.isPlaying, playerState.durationMs, onOpenPlayer, onOpenFullscreen,
-                        thumbnailModifier = Modifier.sharedTransition(SharedKeys.artwork(it.id), this),
+                        thumbnailModifier = if (playerOrigin == null) Modifier.sharedTransition(SharedKeys.artwork(it.id), this) else Modifier,
                     )
                 }
             }
+        }
+
+        MixtapeDropTray(
+            visible = dragActive,
+            mixtapes = mixtapes,
+            onDrop = vm::dropOnMixtape,
+            onDropNew = { newMixtapeFor = it },
+            modifier = Modifier.align(Alignment.TopCenter),
+        )
+    }
+    newMixtapeFor?.let { entryId ->
+        NameDialog(R.string.mixtape_new, "", R.string.mixtape_create, onDismiss = { newMixtapeFor = null }) { name ->
+            newMixtapeFor = null
+            vm.createMixtape(name, listOf(entryId))
         }
     }
 }
@@ -298,8 +356,6 @@ private fun TopBar(
     onQuery: (String) -> Unit,
     onSearch: () -> Unit,
     onCloseSearch: () -> Unit,
-    sort: LibrarySort,
-    onSort: (LibrarySort) -> Unit,
     onSettings: () -> Unit,
 ) {
     Row(
@@ -330,19 +386,6 @@ private fun TopBar(
             Spacer(Modifier.width(10.dp))
             Text(stringResource(R.string.app_name), style = MaterialTheme.typography.headlineMedium, modifier = Modifier.weight(1f))
             IconButton(onClick = onSearch) { Icon(Icons.Rounded.Search, stringResource(R.string.search)) }
-            Box {
-                var open by remember { mutableStateOf(false) }
-                IconButton(onClick = { open = true }) { Icon(Icons.AutoMirrored.Rounded.Sort, stringResource(R.string.sort)) }
-                DropdownMenu(open, onDismissRequest = { open = false }) {
-                    LibrarySort.entries.forEach { option ->
-                        DropdownMenuItem(
-                            text = { Text(stringResource(sortLabel(option))) },
-                            onClick = { onSort(option); open = false },
-                            trailingIcon = { if (option == sort) Icon(Icons.Rounded.CheckCircle, null, tint = MaterialTheme.colorScheme.primary) },
-                        )
-                    }
-                }
-            }
             IconButton(onClick = onSettings) { Icon(Icons.Rounded.Settings, stringResource(R.string.settings)) }
         }
     }
@@ -559,9 +602,13 @@ private fun ClipboardBanner(vm: MainViewModel) {
     }
 }
 
+/** "Downloads ③", "Mixtapes ② +", "Library ⑧ ⇅": the same head for every part of the screen. */
 @Composable
-private fun SectionHeader(title: String, count: Int? = null) {
-    Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 14.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+fun SectionHeader(title: String, count: Int? = null, actions: @Composable RowScope.() -> Unit = {}) {
+    Row(
+        Modifier.fillMaxWidth().padding(start = 20.dp, end = 8.dp, top = 14.dp, bottom = 4.dp).height(40.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
         Text(title, style = MaterialTheme.typography.titleMedium)
         if (count != null) {
             Spacer(Modifier.width(8.dp))
@@ -572,6 +619,25 @@ private fun SectionHeader(title: String, count: Int? = null) {
                 modifier = Modifier.background(MaterialTheme.colorScheme.primaryContainer, CircleShape).padding(horizontal = 8.dp, vertical = 2.dp),
             )
         }
+        Spacer(Modifier.weight(1f))
+        actions()
+    }
+}
+
+@Composable
+private fun SortButton(sort: LibrarySort, onSort: (LibrarySort) -> Unit) {
+    Box {
+        var open by remember { mutableStateOf(false) }
+        IconButton(onClick = { open = true }) { Icon(Icons.AutoMirrored.Rounded.Sort, stringResource(R.string.sort)) }
+        DropdownMenu(open, onDismissRequest = { open = false }) {
+            LibrarySort.entries.forEach { option ->
+                DropdownMenuItem(
+                    text = { Text(stringResource(sortLabel(option))) },
+                    onClick = { onSort(option); open = false },
+                    trailingIcon = { if (option == sort) Icon(Icons.Rounded.CheckCircle, null, tint = MaterialTheme.colorScheme.primary) },
+                )
+            }
+        }
     }
 }
 
@@ -580,7 +646,7 @@ private fun FilterRow(filter: LibraryFilter, onFilter: (LibraryFilter) -> Unit, 
     LazyRow(
         contentPadding = PaddingValues(horizontal = 16.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
-        modifier = Modifier.padding(top = 10.dp, bottom = 6.dp),
+        modifier = Modifier.padding(top = 2.dp, bottom = 6.dp),
     ) {
         items(LibraryFilter.entries) { option ->
             val label = when (option) {
@@ -717,6 +783,10 @@ private fun EntryCard(
     onPlay: () -> Unit,
     vm: MainViewModel,
     arrived: Boolean = false,
+    onDragStart: () -> Unit = {},
+    /** The player was opened from this card: its picture travels into the player and back. */
+    travels: Boolean = false,
+    playerOpen: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -739,14 +809,21 @@ private fun EntryCard(
                 .padding(horizontal = 8.dp, vertical = 2.dp)
                 .clip(MaterialTheme.shapes.medium)
                 .background(background)
-                .combinedClickable(onClick = onPlay, onLongClick = { menu = true })
+                // A long press lifts the card, to drop it on a mixtape (the menu is behind ⋮); a tap plays it.
+                .entryDragSource(entry.id, onDragStart)
+                .tapLeavingLongPress(onPlay)
                 .padding(horizontal = 8.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(Modifier.width(128.dp)) {
                 Box {
-                    Thumbnail(entry, Modifier.fillMaxWidth().aspectRatio(16f / 9f))
-                    if (isCurrent) {
+                    // A plain bitmap: the card is draggable, and the drag shadow cannot draw hardware ones.
+                    TravellingThumbnail(
+                        entry, travels, away = travels && playerOpen,
+                        modifier = Modifier.fillMaxWidth().aspectRatio(16f / 9f),
+                        software = true,
+                    )
+                    if (isCurrent && !(travels && playerOpen)) {
                         Box(
                             Modifier.align(Alignment.Center).size(34.dp).background(Color.Black.copy(alpha = 0.55f), CircleShape),
                             contentAlignment = Alignment.Center,
@@ -854,7 +931,6 @@ fun MiniPlayer(
         }
     }
     val duration = durationMs.takeIf { it > 0 } ?: entry.durationMs
-    val speed = vm.player.state.collectAsStateWithLifecycle().value.speed
     Surface(
         color = MaterialTheme.colorScheme.surfaceContainerHigh,
         shape = RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp),
@@ -869,20 +945,11 @@ fun MiniPlayer(
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
                     Text(entry.title, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Spacer(Modifier.height(3.dp))
-                    // A little cassette window: the reels turn while it plays, the tape winds on with the position.
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        ReelWindow(
-                            progress = if (duration > 0) position.toFloat() / duration else 0f,
-                            velocity = if (isPlaying) ReelSpeed.PLAY * speed else 0f,
-                        )
-                        Spacer(Modifier.width(8.dp))
-                        Text(
-                            Format.clock(position) + " / " + Format.clock(duration),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
+                    Text(
+                        Format.clock(position) + " / " + Format.clock(duration),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
                 IconButton(onClick = { vm.player.seekBack() }) { Icon(Icons.Rounded.Replay10, stringResource(R.string.action_back_10)) }
                 Surface(shape = CircleShape, color = MaterialTheme.colorScheme.primary, modifier = Modifier.size(46.dp)) {

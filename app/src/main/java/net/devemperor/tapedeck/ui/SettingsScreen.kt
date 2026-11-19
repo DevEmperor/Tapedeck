@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
@@ -85,8 +86,11 @@ fun SettingsScreen(vm: MainViewModel, onBack: () -> Unit) {
             Spacer(Modifier.width(4.dp))
             Text(stringResource(R.string.settings), style = MaterialTheme.typography.headlineSmall)
         }
+        val listState = rememberLazyListState()
+        Box(Modifier.fillMaxSize()) {
         LazyColumn(
             Modifier.fillMaxSize(),
+            state = listState,
             contentPadding = PaddingValues(
                 start = 16.dp, end = 16.dp,
                 bottom = 32.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding(),
@@ -183,6 +187,9 @@ fun SettingsScreen(vm: MainViewModel, onBack: () -> Unit) {
                         R.string.setting_only_finished, R.string.setting_only_finished_sub, settings.autoDeleteOnlyFinished,
                         enabled = settings.autoDeleteEnabled,
                     ) { on -> vm.updateSettings { it.copy(autoDeleteOnlyFinished = on) } }
+                    SwitchRow(R.string.setting_protect_mixtapes, R.string.setting_protect_mixtapes_sub, settings.protectMixtapes) { on ->
+                        vm.updateSettings { it.copy(protectMixtapes = on) }
+                    }
                     ActionRow(stringResource(R.string.delete_finished_now), stringResource(R.string.delete_finished_now_sub), last = true) { vm.deleteFinished() }
                 }
             }
@@ -224,6 +231,8 @@ fun SettingsScreen(vm: MainViewModel, onBack: () -> Unit) {
                     InfoRow(stringResource(R.string.legal_title), stringResource(R.string.legal_body), last = true)
                 }
             }
+        }
+        VerticalScrollbar(listState)
         }
     }
 }
