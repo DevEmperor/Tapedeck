@@ -22,6 +22,8 @@ data class PlayerUiState(
     val hasNext: Boolean = false,
     val hasPrevious: Boolean = false,
     val speed: Float = 1f,
+    /** Width ÷ height of the picture once the player knows it; below 1 for an upright video (Instagram, Shorts). */
+    val videoAspect: Float? = null,
 )
 
 /** The app's connection to [PlaybackService]; lives while the activity is started. */
@@ -128,6 +130,8 @@ class PlayerConnection(private val context: Context) {
             hasNext = controller.hasNextMediaItem(),
             hasPrevious = controller.hasPreviousMediaItem(),
             speed = controller.playbackParameters.speed,
+            videoAspect = controller.videoSize.takeIf { it.width > 0 && it.height > 0 }
+                ?.let { it.width * it.pixelWidthHeightRatio / it.height },
         )
     }
 }

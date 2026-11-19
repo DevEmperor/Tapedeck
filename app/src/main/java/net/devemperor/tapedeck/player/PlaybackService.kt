@@ -62,8 +62,8 @@ class PlaybackService : MediaLibraryService() {
             .setPlayerCommand(Player.COMMAND_SEEK_BACK)
             .setSlots(CommandButton.SLOT_BACK)
             .build()
-        val forward = CommandButton.Builder(CommandButton.ICON_SKIP_FORWARD_30)
-            .setDisplayName(getString(R.string.action_forward_30))
+        val forward = CommandButton.Builder(CommandButton.ICON_SKIP_FORWARD_10)
+            .setDisplayName(getString(R.string.action_forward_10))
             .setPlayerCommand(Player.COMMAND_SEEK_FORWARD)
             .setSlots(CommandButton.SLOT_FORWARD)
             .build()
@@ -269,7 +269,8 @@ class PlaybackService : MediaLibraryService() {
 
     private companion object {
         const val SEEK_BACK_MS = 10_000L
-        const val SEEK_FORWARD_MS = 30_000L
+        // Both ways the same since 0.4.1 (Jannis): one press is always ten seconds.
+        const val SEEK_FORWARD_MS = 10_000L
         const val SAVE_INTERVAL_MS = 5_000L
     }
 }

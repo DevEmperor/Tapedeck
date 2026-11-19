@@ -1,7 +1,10 @@
 package net.devemperor.tapedeck.ui
 
 import android.app.Activity
+import android.content.Context
 import android.content.pm.ActivityInfo
+import android.provider.Settings
+import android.view.OrientationEventListener
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -36,7 +39,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.List
 import androidx.compose.material.icons.rounded.FastForward
 import androidx.compose.material.icons.rounded.FastRewind
-import androidx.compose.material.icons.rounded.Forward30
+import androidx.compose.material.icons.rounded.Forward10
 import androidx.compose.material.icons.rounded.Fullscreen
 import androidx.compose.material.icons.rounded.FullscreenExit
 import androidx.compose.material.icons.rounded.GraphicEq
@@ -63,6 +66,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -100,6 +104,7 @@ import net.devemperor.tapedeck.Format
 import net.devemperor.tapedeck.R
 import net.devemperor.tapedeck.data.Chapter
 import net.devemperor.tapedeck.data.Entry
+import net.devemperor.tapedeck.player.PlayerUiState
 import java.io.File
 import kotlin.math.abs
 
@@ -129,8 +134,67 @@ fun PlayerScreen(vm: MainViewModel, startFullscreen: Boolean = false, onClose: (
     var fullscreen by rememberSaveable { mutableStateOf(startFullscreen) }
     var chaptersOpen by remember { mutableStateOf(false) }
 
+    // Upright videos (Instagram, Shorts) are shown upright: big in the player, and full screen stays upright.
+    val aspect = videoAspect(entry, state)
+    val upright = aspect < 1f
+
+    // Turning the phone: a landscape video goes full screen when the phone is turned sideways (with
+    // auto-rotate on) and back when it is held upright again — the way video apps do it. An upright video
+    // already fills the upright screen, so turning does nothing there. After leaving full screen by hand
+    // while the phone is still sideways, it waits for the phone to be upright once before turning counts again.
+    val context = LocalContext.current
+    val held by rememberHeldOrientation(enabled = entry.isVideo)
+    var byTurning by rememberSaveable { mutableStateOf(false) }
+    var waitUpright by rememberSaveable { mutableStateOf(false) }
+    var sawSideways by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(held, upright, entry.isVideo) {
+        if (!entry.isVideo) return@LaunchedEffect
+        when (held) {
+            Held.UPRIGHT -> {
+                waitUpright = false
+                if (fullscreen && !upright && (byTurning || sawSideways) && autoRotateOn(context)) {
+                    fullscreen = false
+                    byTurning = false
+                    sawSideways = false
+                }
+            }
+            Held.SIDEWAYS -> when {
+                fullscreen -> sawSideways = true
+                !upright && !waitUpright && autoRotateOn(context) -> {
+                    fullscreen = true
+                    byTurning = true
+                    sawSideways = true
+                }
+            }
+            Held.UNKNOWN -> Unit
+        }
+    }
+    fun enterFullscreen() {
+        fullscreen = true
+        byTurning = false
+        sawSideways = held == Held.SIDEWAYS
+    }
+    fun exitFullscreen() {
+        fullscreen = false
+        byTurning = false
+        sawSideways = false
+        if (held == Held.SIDEWAYS) waitUpright = true
+    }
+
+    // The screen's orientation follows the video, not the sensor: the player with a video stays upright
+    // (turning the phone opens full screen instead of a squeezed sideways player), full screen takes the
+    // video's own shape. Audio leaves it to the phone's setting.
+    val activity = context as? Activity
+    val wanted = when {
+        !entry.isVideo -> ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+        fullscreen && !upright -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+        else -> ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+    }
+    LaunchedEffect(wanted) { activity?.requestedOrientation = wanted }
+    DisposableEffect(Unit) { onDispose { activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED } }
+
     if (fullscreen && entry.isVideo) {
-        FullscreenVideo(vm, controller, entry, onExit = { fullscreen = false })
+        FullscreenVideo(vm, controller, entry, onExit = ::exitFullscreen)
         return
     }
 
@@ -160,18 +224,22 @@ fun PlayerScreen(vm: MainViewModel, startFullscreen: Boolean = false, onClose: (
                 Spacer(Modifier.size(48.dp))
             }
 
-            Spacer(Modifier.weight(1f))
             if (entry.isVideo) {
-                Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f).shadow(18.dp, MaterialTheme.shapes.large).clip(MaterialTheme.shapes.large)) {
-                    VideoSurface(controller, Modifier.fillMaxSize())
-                    // A double tap on the picture goes full screen, as the button does.
-                    Box(Modifier.matchParentSize().pointerInput(Unit) { detectTapGestures(onDoubleTap = { fullscreen = true }) })
-                    IconButton(
-                        onClick = { fullscreen = true },
-                        modifier = Modifier.align(Alignment.BottomEnd).padding(6.dp).background(Color.Black.copy(alpha = 0.45f), CircleShape),
-                    ) { Icon(Icons.Rounded.Fullscreen, stringResource(R.string.fullscreen), tint = Color.White) }
+                // As large as the space between the top bar and the title allows, in the video's own shape:
+                // an upright reel gets the height, a film the width.
+                Box(Modifier.weight(1f).fillMaxWidth().padding(vertical = 16.dp), contentAlignment = Alignment.Center) {
+                    Box(Modifier.aspectRatio(aspect).shadow(18.dp, MaterialTheme.shapes.large).clip(MaterialTheme.shapes.large)) {
+                        VideoSurface(controller, Modifier.fillMaxSize())
+                        // A double tap on the picture goes full screen, as the button does.
+                        Box(Modifier.matchParentSize().pointerInput(Unit) { detectTapGestures(onDoubleTap = { enterFullscreen() }) })
+                        IconButton(
+                            onClick = ::enterFullscreen,
+                            modifier = Modifier.align(Alignment.BottomEnd).padding(6.dp).background(Color.Black.copy(alpha = 0.45f), CircleShape),
+                        ) { Icon(Icons.Rounded.Fullscreen, stringResource(R.string.fullscreen), tint = Color.White) }
+                    }
                 }
             } else {
+                Spacer(Modifier.weight(1f))
                 Thumbnail(
                     entry,
                     Modifier.fillMaxWidth(0.86f).aspectRatio(1f).shadow(24.dp, MaterialTheme.shapes.extraLarge),
@@ -179,8 +247,8 @@ fun PlayerScreen(vm: MainViewModel, startFullscreen: Boolean = false, onClose: (
                     showKind = false,
                     corner = 30.dp,
                 )
+                Spacer(Modifier.weight(1f))
             }
-            Spacer(Modifier.weight(1f))
 
             Column(Modifier.fillMaxWidth()) {
                 Text(entry.title, style = MaterialTheme.typography.titleLarge, maxLines = 2, overflow = TextOverflow.Ellipsis)
@@ -221,7 +289,7 @@ fun PlayerScreen(vm: MainViewModel, startFullscreen: Boolean = false, onClose: (
                     }
                 }
                 IconButton(onClick = { vm.player.seekForward() }, modifier = Modifier.size(60.dp)) {
-                    Icon(Icons.Rounded.Forward30, stringResource(R.string.action_forward_30), Modifier.size(36.dp))
+                    Icon(Icons.Rounded.Forward10, stringResource(R.string.action_forward_10), Modifier.size(36.dp))
                 }
                 IconButton(onClick = { vm.player.next() }, enabled = state.hasNext, modifier = Modifier.size(52.dp)) {
                     Icon(Icons.Rounded.SkipNext, stringResource(R.string.next), Modifier.size(30.dp))
@@ -331,22 +399,19 @@ private fun VideoSurface(controller: Player?, modifier: Modifier = Modifier) {
 
 /**
  * Full-screen video with its own controls: a tap shows or hides them, and while the video plays they fade
- * out by themselves after a few seconds. Title and the way back at the top, ⟲10 · play/pause · 30⟳ in the
+ * out by themselves after a few seconds. Title and the way back at the top, ⟲10 · play/pause · 10⟳ in the
  * middle, the seek bar with the chapter and "leave full screen" at the bottom.
  */
 @Composable
 private fun FullscreenVideo(vm: MainViewModel, controller: Player?, entry: Entry, onExit: () -> Unit) {
+    // The orientation is set by PlayerScreen (upright videos stay upright); here only the system bars go.
     val activity = LocalContext.current as? Activity
     DisposableEffect(Unit) {
         val window = activity?.window
         val insets = window?.let { WindowCompat.getInsetsController(it, it.decorView) }
-        activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
         insets?.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         insets?.hide(WindowInsetsCompat.Type.systemBars())
-        onDispose {
-            activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
-            insets?.show(WindowInsetsCompat.Type.systemBars())
-        }
+        onDispose { insets?.show(WindowInsetsCompat.Type.systemBars()) }
     }
     BackHandler(onBack = onExit)
 
@@ -491,7 +556,7 @@ private fun FullscreenVideo(vm: MainViewModel, controller: Player?, entry: Entry
                         }
                     }
                     IconButton(onClick = { vm.player.seekForward(); touched() }, modifier = Modifier.size(64.dp)) {
-                        Icon(Icons.Rounded.Forward30, stringResource(R.string.action_forward_30), tint = Color.White, modifier = Modifier.size(40.dp))
+                        Icon(Icons.Rounded.Forward10, stringResource(R.string.action_forward_10), tint = Color.White, modifier = Modifier.size(40.dp))
                     }
                 }
 
@@ -612,6 +677,46 @@ private fun ChapterSheet(entry: Entry, position: Long, onPick: (Chapter) -> Unit
         }
     }
 }
+
+/** Width ÷ height of the picture: what the player reports, else what yt-dlp said at download, else 16:9. */
+private fun videoAspect(entry: Entry, state: PlayerUiState): Float {
+    val live = state.videoAspect?.takeIf { state.entryId == entry.id }
+    val w = entry.videoWidth ?: 0
+    val h = entry.videoHeight ?: 0
+    val stored = if (w > 0 && h > 0) w.toFloat() / h else null
+    return (live ?: stored ?: 16f / 9f).coerceIn(0.4f, 2.6f)
+}
+
+/** How the phone is held, from the motion sensor — also while the screen itself is locked to one orientation. */
+private enum class Held { UPRIGHT, SIDEWAYS, UNKNOWN }
+
+@Composable
+private fun rememberHeldOrientation(enabled: Boolean): State<Held> {
+    val context = LocalContext.current
+    val held = remember { mutableStateOf(Held.UNKNOWN) }
+    DisposableEffect(enabled) {
+        if (!enabled) return@DisposableEffect onDispose { }
+        val listener = object : OrientationEventListener(context) {
+            override fun onOrientationChanged(degrees: Int) {
+                if (degrees == ORIENTATION_UNKNOWN) return // lying flat
+                // Gaps between the ranges, so a phone held at an angle does not flip back and forth.
+                val next = when {
+                    degrees <= 25 || degrees >= 335 -> Held.UPRIGHT
+                    degrees in 65..115 || degrees in 245..295 -> Held.SIDEWAYS
+                    else -> return
+                }
+                if (held.value != next) held.value = next
+            }
+        }
+        if (listener.canDetectOrientation()) listener.enable()
+        onDispose { listener.disable() }
+    }
+    return held
+}
+
+/** The quick-settings "Auto-rotate" switch: with it off, turning the phone changes nothing. */
+private fun autoRotateOn(context: Context): Boolean =
+    Settings.System.getInt(context.contentResolver, Settings.System.ACCELEROMETER_ROTATION, 0) == 1
 
 private fun currentChapter(chapters: List<Chapter>, position: Long): Chapter? =
     chapters.lastOrNull { it.startMs <= position }

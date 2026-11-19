@@ -69,6 +69,9 @@ data class Entry(
     val chapters: List<Chapter> = emptyList(),
     /** How often the download was retried automatically after a yt-dlp update. */
     val autoRetries: Int = 0,
+    /** Size of a video's picture (from yt-dlp's info), so an upright one is shown upright before it plays. */
+    val videoWidth: Int? = null,
+    val videoHeight: Int? = null,
 ) {
     val isDone get() = state == DownloadState.DONE && mediaFile != null
     val isActive get() = state == DownloadState.QUEUED || state == DownloadState.WAITING_NETWORK || state == DownloadState.RUNNING

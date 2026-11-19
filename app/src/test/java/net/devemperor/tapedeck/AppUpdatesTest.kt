@@ -37,4 +37,16 @@ class AppUpdatesTest {
 
         assertEquals("https://x/universal.apk", AppUpdates.parse(body, listOf("riscv64"))!!.apkUrl)
     }
+
+    @Test
+    fun `asks again on a return from the background, not only on a fresh start`() {
+        val minute = 60_000L
+        // A fresh start always asks.
+        assertTrue(AppUpdates.isDue(checkedThisProcess = false, sinceLastCheckMs = 0))
+        // Back in the app after two days, or after two hours: the process lived on, yet it asks.
+        assertTrue(AppUpdates.isDue(checkedThisProcess = true, sinceLastCheckMs = 2 * 24 * 60 * minute))
+        assertTrue(AppUpdates.isDue(checkedThisProcess = true, sinceLastCheckMs = 120 * minute))
+        // Just switched apps for a moment: no new request.
+        assertFalse(AppUpdates.isDue(checkedThisProcess = true, sinceLastCheckMs = 5 * minute))
+    }
 }

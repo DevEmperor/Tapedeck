@@ -235,6 +235,8 @@ class DownloadService : LifecycleService() {
                 // Cut sponsor segments shift every chapter, so only uncut downloads keep them.
                 chapters = if (sponsorBlock) emptyList() else info?.chapters.orEmpty(),
                 formatLabel = formatLabel(entry, media, info),
+                videoWidth = if (entry.isVideo) info?.width else null,
+                videoHeight = if (entry.isVideo) info?.height else null,
                 completedAt = System.currentTimeMillis(),
                 errorKind = null,
                 errorDetail = null,

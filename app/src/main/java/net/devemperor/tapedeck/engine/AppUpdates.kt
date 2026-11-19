@@ -29,7 +29,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.File
 import java.security.MessageDigest
-import kotlin.time.Duration.Companion.hours
+import kotlin.time.Duration.Companion.minutes
 
 /** A Tapedeck release on GitHub, with the APK that fits this phone. */
 data class AppRelease(
@@ -51,8 +51,9 @@ sealed interface AppInstallState {
 }
 
 /**
- * Tapedeck is not on Google Play, so it looks for its own updates: when the app is opened (once per start,
- * then at most every six hours, never in the background) it asks GitHub for the latest release. On request
+ * Tapedeck is not on Google Play, so it looks for its own updates: whenever the app comes to the foreground
+ * (on every start, and on a return from the background once the last look is half an hour old; never in the
+ * background itself) it asks GitHub for the latest release. On request
  * it downloads the APK built for this phone, checks it against GitHub's SHA-256, and hands it to Android's
  * package installer. Android itself only accepts it if it carries the same signature as the installed app.
  */
@@ -68,13 +69,13 @@ class AppUpdates(private val http: OkHttpClient, private val settings: Settings)
     private var checkedThisProcess = false
 
     /**
-     * Once per app start, then at most every six hours. The answer is only kept in memory, so a fresh
-     * start asks again rather than showing a stale hint.
+     * Called whenever Tapedeck comes to the foreground — a fresh start as well as a return after days in
+     * the background. Asks on every start, then whenever the last answer is half an hour old. The answer
+     * is only kept in memory, so a fresh start asks again rather than showing a stale hint.
      */
     suspend fun checkIfDue() {
         if (!settings.current.checkAppUpdates) return
-        val since = System.currentTimeMillis() - settings.engine.value.lastAppCheckAt
-        if (checkedThisProcess && since < CHECK_INTERVAL.inWholeMilliseconds) return
+        if (!isDue(checkedThisProcess, System.currentTimeMillis() - settings.engine.value.lastAppCheckAt)) return
         checkedThisProcess = true
         check()
     }
@@ -275,8 +276,14 @@ class AppUpdates(private val http: OkHttpClient, private val settings: Settings)
         private const val TAG = "TapedeckAppUpdates"
         const val RELEASES_PAGE = "https://github.com/DevEmperor/Tapedeck/releases"
         private const val LATEST_URL = "https://api.github.com/repos/DevEmperor/Tapedeck/releases/latest"
-        private val CHECK_INTERVAL = 6.hours
+        // Was six hours until 0.4.0: back in the app two hours after the last look, a new release stayed
+        // hidden until Tapedeck was closed and started again. GitHub allows 60 unauthenticated calls an hour.
+        private val CHECK_INTERVAL = 30.minutes
         private val json = Json { ignoreUnknownKeys = true }
+
+        /** Whether coming to the foreground asks GitHub (pure, unit-tested). */
+        fun isDue(checkedThisProcess: Boolean, sinceLastCheckMs: Long): Boolean =
+            !checkedThisProcess || sinceLastCheckMs >= CHECK_INTERVAL.inWholeMilliseconds
 
         fun updateDir(context: Context) = File(context.cacheDir, "app-update")
 

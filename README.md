@@ -67,11 +67,11 @@ stopped.
     <td align="center"><img src="docs/images/library.png" width="190" alt="The library: downloads with thumbnails, length, format and size, what is new or heard, and the mini player at the bottom"></td>
     <td align="center"><img src="docs/images/share.png" width="190" alt="The new-download sheet after sharing a link: title and picture, audio or video, and the resolution"></td>
     <td align="center"><img src="docs/images/downloading.png" width="190" alt="A video downloading in 1080p with percent, speed and time left"></td>
-    <td align="center"><img src="docs/images/player.png" width="190" alt="The player: cover, chapter, seek bar, back 10 and forward 30 seconds, speed, skip silence and chapters"></td>
+    <td align="center"><img src="docs/images/player.png" width="190" alt="The player: cover, chapter, seek bar, back and forward 10 seconds, speed, skip silence and chapters"></td>
   </tr>
   <tr>
     <td align="center"><img src="docs/images/video.png" width="190" alt="A video playing in the player, with a full-screen button"></td>
-    <td align="center"><img src="docs/images/notification.png" width="190" alt="The media notification with cover, play and pause, back 10 and forward 30 seconds"></td>
+    <td align="center"><img src="docs/images/notification.png" width="190" alt="The media notification with cover, play and pause, back and forward 10 seconds"></td>
     <td align="center"><img src="docs/images/formats.png" width="190" alt="Choosing a format like yt-dlp -F: cards with resolution, codecs, size and bitrate; 1080p60 VP9 is picked and gets AAC sound to go with it"></td>
     <td align="center"><img src="docs/images/settings.png" width="190" alt="Settings: offer copied links, SponsorBlock, and own sections for audio (format, quality) and video (format, resolution)"></td>
   </tr>
@@ -127,7 +127,7 @@ stopped.
 ### Made for the car
 
 - **Plays with the screen off** and keeps playing when you switch apps.
-- **Steering wheel, headset and lock screen** control it; the notification has **−10 s / +30 s**.
+- **Steering wheel, headset and lock screen** control it; the notification has **−10 s / +10 s**.
 - **Remembers where you stopped** in every download and resumes a few seconds earlier, so you don't lose
   the thread.
 - **The car's play button resumes the last download**, even after Android closed the app.
@@ -139,8 +139,12 @@ stopped.
 - **Full screen with gestures**: double tap left or right for −10 / +10 s (keep tapping for more), or
   press and slide sideways to scrub — both show how far you jump. A double tap on the video, or on the
   mini player, goes straight to full screen.
+- **Turn the phone** sideways and a landscape video goes full screen; hold it upright again and you are
+  back in the player (with *Auto-rotate* on, as in other video apps).
+- **Upright videos stay upright**: a reel or Short fills the player in its own shape, and its full
+  screen is upright too.
 
-<p align="center"><img src="docs/images/gestures.png" width="760" alt="Full-screen video: a double tap on the right shows +30 s after three taps, and sliding sideways shows +0:29 and the target time 1:25 of 10:34"></p>
+<p align="center"><img src="docs/images/gestures.png" width="760" alt="Full-screen video: a double tap and two more taps on the right show +30 s, and sliding sideways shows +0:30 and the target time 1:11 of 10:34"></p>
 - **Swipe Tapedeck away** in the recent apps and everything stops — playback and downloads. Unfinished
   downloads continue from where they were the next time you open it.
 
@@ -153,7 +157,8 @@ stopped.
 
 ### Updates without a store
 
-- Tapedeck asks GitHub for a new release when you open it. **Install** downloads the APK for your
+- Tapedeck asks GitHub for a new release when you open it — also when you come back to it after it
+  sat in the background. **Install** downloads the APK for your
   phone's processor, checks it against GitHub's SHA-256 checksum, and hands it to Android's installer —
   no browser, no file hunting. Once Android is done, the library says so where the banner was.
 - In the settings, **Update** sits right next to the yt-dlp version and **Check** next to Tapedeck's.

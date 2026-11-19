@@ -155,7 +155,7 @@
     <string name="next">Weiter</string>
     <string name="previous">Zurück</string>
     <string name="action_back_10">10 Sekunden zurück</string>
-    <string name="action_forward_30">30 Sekunden vor</string>
+    <string name="action_forward_10">10 Sekunden vor</string>
     <string name="fullscreen">Vollbild</string>
     <string name="fullscreen_exit">Vollbild beenden</string>
     <string name="chapters">Kapitel</string>
