@@ -1,0 +1,21 @@
+# Gradle / build output
+.gradle/
+.kotlin/
+build/
+/captures
+.externalNativeBuild
+.cxx
+
+# IDE
+.idea/
+*.iml
+.DS_Store
+
+# Local configuration and secrets
+local.properties
+keystore.properties
+*.jks
+*.keystore
+
+# Release artifacts stay local
+/dist/

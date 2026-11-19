@@ -1,0 +1,212 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name" translatable="false">Tapedeck</string>
+    <string name="share_target_label">Save with Tapedeck</string>
+
+    <!-- Library -->
+    <string name="add_link">Add link</string>
+    <string name="search">Search</string>
+    <string name="search_hint">Search title or channel</string>
+    <string name="sort">Sort</string>
+    <string name="sort_newest">Newest first</string>
+    <string name="sort_oldest">Oldest first</string>
+    <string name="sort_title">Title</string>
+    <string name="sort_last_played">Last played</string>
+    <string name="settings">Settings</string>
+    <string name="section_downloads">Downloads</string>
+    <string name="filter_all">All</string>
+    <string name="filter_audio">Audio</string>
+    <string name="filter_video">Video</string>
+    <string name="filter_new">New</string>
+    <string name="no_match">Nothing matches this filter.</string>
+    <string name="empty_title">Your tape rack is empty</string>
+    <string name="empty_body">Share a YouTube video with Tapedeck, or tap “Add link”. Downloads play offline, with the screen off and through the car stereo.</string>
+    <string name="empty_hint">Share → Tapedeck</string>
+    <string name="badge_new">New</string>
+    <string name="badge_heard">Heard</string>
+    <string name="deleted_today">Deleted today</string>
+    <plurals name="deleted_in_days">
+        <item quantity="one">Deleted in %d day</item>
+        <item quantity="other">Deleted in %d days</item>
+    </plurals>
+    <string name="engine_updating">Updating yt-dlp in the background…</string>
+    <string name="engine_failed">yt-dlp could not be started. Reinstalling Tapedeck usually helps.</string>
+
+    <!-- Download states -->
+    <string name="state_queued">Waiting in line</string>
+    <string name="state_waiting_network">Waiting for Wi-Fi</string>
+    <string name="progress_starting">Starting…</string>
+    <string name="progress_preparing">Preparing…</string>
+    <string name="progress_downloading">Downloading…</string>
+    <string name="progress_processing">Converting…</string>
+    <string name="progress_speed">%s/s</string>
+    <string name="progress_eta">%s left</string>
+    <string name="format_kbit">%d kbit/s</string>
+    <string name="cancel">Cancel</string>
+    <string name="retry">Try again</string>
+    <string name="delete">Delete</string>
+    <string name="undo">Undo</string>
+    <plurals name="deleted">
+        <item quantity="one">Deleted</item>
+        <item quantity="other">%d deleted</item>
+    </plurals>
+    <plurals name="started">
+        <item quantity="one">Download started</item>
+        <item quantity="other">%d downloads started</item>
+    </plurals>
+
+    <!-- Errors -->
+    <string name="error_network">No connection. Try again once you are online.</string>
+    <string name="error_unavailable">This video is no longer available.</string>
+    <string name="error_private">This video is private.</string>
+    <string name="error_age">Age-restricted: YouTube only plays it when signed in.</string>
+    <string name="error_members">Only for channel members.</string>
+    <string name="error_not_yet">This premiere or live stream has not started yet.</string>
+    <string name="error_bot">YouTube asks for a bot check. Try again later or over another network.</string>
+    <string name="error_blocked">YouTube refused the download. Tapedeck will fetch a newer yt-dlp; try again shortly.</string>
+    <string name="error_unsupported">This link is not supported.</string>
+    <string name="error_format">The chosen quality is not available. Try another one.</string>
+    <string name="error_storage">Not enough free storage.</string>
+    <string name="error_extractor">YouTube changed something. Tapedeck updates yt-dlp; try again in a moment.</string>
+    <string name="error_engine">yt-dlp could not run.</string>
+    <string name="error_unknown">The download failed.</string>
+
+    <!-- Entry menu -->
+    <string name="more">More</string>
+    <string name="play_from_start">Play from the start</string>
+    <string name="mark_heard">Mark as heard</string>
+    <string name="mark_unheard">Mark as not heard</string>
+    <string name="keep">Keep (no auto-delete)</string>
+    <string name="unkeep">Allow auto-delete</string>
+    <string name="share_file">Share file</string>
+    <string name="export">Save to Downloads</string>
+    <string name="exported">Saved to Download/Tapedeck</string>
+    <string name="export_failed">Could not save the file</string>
+    <string name="open_source">Open original</string>
+    <string name="nothing_finished">Nothing heard to the end yet</string>
+
+    <!-- Add sheet -->
+    <string name="add_title">New download</string>
+    <string name="add_url_label">Link</string>
+    <string name="paste">Paste</string>
+    <string name="preview_loading">Loading title…</string>
+    <string name="kind_audio">Audio</string>
+    <string name="kind_video">Video</string>
+    <string name="option_format">Format</string>
+    <string name="option_quality">Quality</string>
+    <string name="option_resolution">Resolution</string>
+    <string name="format_m4a">M4A</string>
+    <string name="format_mp3">MP3</string>
+    <string name="format_original">Original</string>
+    <string name="quality_high">High</string>
+    <string name="quality_saver">Data saver</string>
+    <string name="hint_m4a">Recommended. YouTube’s own AAC sound, saved without re-encoding (about 60 MB per hour).</string>
+    <string name="hint_mp3">For car stereos that play USB sticks. Re-encoded on the phone, so it takes a little longer.</string>
+    <string name="hint_original">Best sound as YouTube streams it (mostly Opus), no conversion.</string>
+    <string name="hint_saver">About 64 kbit/s: plenty for talks and podcasts, about 30 MB per hour.</string>
+    <string name="video_hint">H.264 is preferred: every phone plays it smoothly in hardware.</string>
+    <string name="playlist_whole">Whole playlist</string>
+    <string name="playlist_hint">Download every video of the playlist</string>
+    <string name="playlist_loading">Reading the playlist…</string>
+    <string name="playlist_failed">The playlist could not be read</string>
+    <plurals name="videos">
+        <item quantity="one">%d video</item>
+        <item quantity="other">%d videos</item>
+    </plurals>
+    <string name="download">Download</string>
+    <plurals name="download_n">
+        <item quantity="one">Download %d video</item>
+        <item quantity="other">Download %d videos</item>
+    </plurals>
+    <string name="share_no_link">No link found in what was shared</string>
+
+    <!-- Player -->
+    <string name="now_playing">Now playing</string>
+    <string name="play">Play</string>
+    <string name="pause">Pause</string>
+    <string name="next">Next</string>
+    <string name="previous">Previous</string>
+    <string name="action_back_10">Back 10 seconds</string>
+    <string name="action_forward_30">Forward 30 seconds</string>
+    <string name="fullscreen">Full screen</string>
+    <string name="chapters">Chapters</string>
+    <string name="skip_silence_short">Skip silence</string>
+    <string name="close">Close</string>
+    <string name="back">Back</string>
+
+    <!-- Settings -->
+    <string name="group_downloads">Downloads</string>
+    <string name="group_playback">Playback</string>
+    <string name="group_storage">Storage</string>
+    <string name="group_ytdlp">yt-dlp</string>
+    <string name="group_about">About</string>
+    <string name="setting_share">When a link is shared</string>
+    <string name="share_ask">Show the options</string>
+    <string name="share_now">Download right away</string>
+    <string name="setting_default_kind">Download as</string>
+    <string name="setting_wifi_only">Wi-Fi only</string>
+    <string name="setting_wifi_only_sub">Downloads wait for Wi-Fi and continue by themselves</string>
+    <string name="setting_parallel">Downloads at the same time</string>
+    <string name="setting_sponsorblock">Skip sponsor segments</string>
+    <string name="setting_sponsorblock_sub">Cuts sponsored parts, self-promotion and “subscribe” reminders out of new downloads (SponsorBlock)</string>
+    <string name="setting_autoplay">Keep playing</string>
+    <string name="setting_autoplay_sub">After one download, continue with the next one in the library’s order</string>
+    <string name="setting_announcements">Pause for announcements</string>
+    <string name="setting_announcements_sub">Navigation prompts pause playback instead of talking over it</string>
+    <string name="setting_rewind">Rewind when resuming</string>
+    <string name="seconds_short">%d s</string>
+    <string name="skip_silence">Skip silence</string>
+    <string name="skip_silence_sub">Shortens pauses in talks and podcasts</string>
+    <string name="storage_used">Used</string>
+    <string name="storage_used_value">%1$s in %2$s · %3$s free</string>
+    <plurals name="entries">
+        <item quantity="one">%d download</item>
+        <item quantity="other">%d downloads</item>
+    </plurals>
+    <string name="setting_auto_delete">Delete automatically</string>
+    <string name="auto_delete_never">Never</string>
+    <plurals name="after_days">
+        <item quantity="one">After %d day</item>
+        <item quantity="other">After %d days</item>
+    </plurals>
+    <string name="setting_only_finished">Only what was heard to the end</string>
+    <string name="setting_only_finished_sub">Counts from the moment it was finished. Kept downloads are never deleted.</string>
+    <string name="delete_finished_now">Delete everything heard</string>
+    <string name="delete_finished_now_sub">Removes all downloads heard to the end, except kept ones</string>
+    <string name="ytdlp_version">Version</string>
+    <string name="ytdlp_checked">checked %s</string>
+    <string name="ytdlp_never_checked">not checked yet</string>
+    <string name="ytdlp_last_error">last check failed</string>
+    <string name="setting_channel">Update channel</string>
+    <string name="channel_nightly">Nightly</string>
+    <string name="channel_nightly_long">Nightly (recommended, fixes arrive first)</string>
+    <string name="channel_stable">Stable</string>
+    <string name="setting_auto_update">Update automatically</string>
+    <string name="setting_auto_update_sub">Checks twice a day in the background and retries a failed download once after an update</string>
+    <string name="ytdlp_update_now">Update now</string>
+    <string name="ytdlp_update_now_sub">Fetches the newest yt-dlp from GitHub</string>
+    <string name="ytdlp_updated">yt-dlp updated to %s</string>
+    <string name="ytdlp_up_to_date">yt-dlp is up to date</string>
+    <string name="ytdlp_update_failed">The update failed. Check the connection.</string>
+    <string name="source_code">Source code</string>
+    <string name="licenses">Open source</string>
+    <string name="licenses_body">yt-dlp (Unlicense), youtubedl-android (GPL-3.0), Python (PSF), FFmpeg (GPL), QuickJS (MIT), AndroidX Media3 (Apache-2.0), Coil (Apache-2.0), OkHttp (Apache-2.0). Tapedeck itself is GPL-3.0.</string>
+    <string name="legal_title">Please note</string>
+    <string name="legal_body">Only download what you may keep, for example your own videos, free content or a private copy where your law allows it.</string>
+
+    <!-- Notifications and Android Auto -->
+    <string name="channel_downloads">Running downloads</string>
+    <string name="channel_done">Finished downloads</string>
+    <string name="notif_preparing">Preparing downloads…</string>
+    <string name="notif_waiting_network_title">Waiting for Wi-Fi</string>
+    <plurals name="notif_waiting_count">
+        <item quantity="one">%d download continues on Wi-Fi</item>
+        <item quantity="other">%d downloads continue on Wi-Fi</item>
+    </plurals>
+    <string name="notif_more">%1$s · +%2$d more</string>
+    <string name="notif_done_audio">Ready to listen</string>
+    <string name="notif_done_video">Ready to watch</string>
+    <string name="browse_continue">Continue</string>
+    <string name="browse_new">New</string>
+    <string name="browse_all">All downloads</string>
+</resources>
