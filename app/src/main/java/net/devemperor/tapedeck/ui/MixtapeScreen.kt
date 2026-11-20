@@ -36,6 +36,7 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Add
@@ -186,15 +187,17 @@ fun MixtapeShelf(
     Column(Modifier.padding(bottom = 6.dp)) {
         SectionHeader(
             stringResource(if (dragging) R.string.drag_to_mixtape else R.string.mixtapes),
-            mixtapes.size.takeIf { !dragging },
+            mixtapes.size.takeIf { !dragging && it > 0 },
         ) {
-            if (drag != null && dragging) {
-                NewMixtapeDropSpot(drag, onDropNew)
-            } else {
-                IconButton(onClick = { creating = true }) { Icon(Icons.Rounded.Add, stringResource(R.string.mixtape_new)) }
+            when {
+                // With no mixtapes yet, the empty cassette below is the spot for a new one.
+                drag != null && dragging && mixtapes.isNotEmpty() -> NewMixtapeDropSpot(drag, onDropNew)
+                !dragging -> IconButton(onClick = { creating = true }) { Icon(Icons.Rounded.Add, stringResource(R.string.mixtape_new)) }
             }
         }
-        LazyRow(
+        if (mixtapes.isEmpty()) {
+            EmptyShelf(drag, onCreate = { creating = true }, onDropNew = onDropNew)
+        } else LazyRow(
             state = row,
             modifier = Modifier.onGloballyPositioned { rowBounds = it.boundsInRoot() },
             // Room above and below for a cassette that grows under the dragged download.
@@ -242,6 +245,62 @@ fun MixtapeShelf(
         }
     }
 }
+
+/**
+ * The shelf before the first mixtape: an empty cassette, drawn dashed, and a word on what mixtapes are. A
+ * tap starts one; while a download is dragged it takes it, as the first item of a new mixtape.
+ */
+@Composable
+private fun EmptyShelf(drag: EntryDrag?, onCreate: () -> Unit, onDropNew: (String) -> Unit) {
+    val dragging = drag?.active == true
+    val over = drag?.hovered == EMPTY_SHELF_SPOT
+    val grow by animateFloatAsState(if (over) 1.08f else 1f, label = "empty-shelf-drop")
+    val primary = MaterialTheme.colorScheme.primary
+    val quiet = MaterialTheme.colorScheme.onSurfaceVariant
+    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+        Box(
+            Modifier.width(156.dp)
+                .then(if (drag == null) Modifier else Modifier.entryDropSpot(drag, EMPTY_SHELF_SPOT, onDropNew))
+                .graphicsLayer {
+                    scaleX = grow
+                    scaleY = grow
+                }
+                .clip(MaterialTheme.shapes.medium).clickable(onClick = onCreate).padding(4.dp),
+        ) {
+            Box(
+                Modifier.fillMaxWidth().aspectRatio(1.58f)
+                    .background(if (over) MaterialTheme.colorScheme.primaryContainer else Color.Transparent, RoundedCornerShape(10.dp))
+                    // Dashed and quiet as a placeholder; in the accent colour (breathing) while a download is dragged.
+                    .dropRing(
+                        look = when {
+                            over -> DropLook.HOVER
+                            else -> DropLook.READY
+                        },
+                        color = if (dragging) primary else quiet.copy(alpha = 0.6f),
+                        corner = 10.dp,
+                        inset = 0.dp,
+                        breathing = dragging,
+                    ),
+                contentAlignment = Alignment.Center,
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Icon(Icons.Rounded.Add, null, tint = if (dragging) primary else quiet, modifier = Modifier.size(26.dp))
+                    Spacer(Modifier.height(4.dp))
+                    Text(stringResource(R.string.mixtape_new), style = MaterialTheme.typography.labelLarge, color = if (dragging) primary else quiet)
+                }
+            }
+        }
+        Spacer(Modifier.width(14.dp))
+        Text(
+            stringResource(R.string.mixtape_empty_hint),
+            style = MaterialTheme.typography.bodySmall,
+            color = quiet,
+            modifier = Modifier.weight(1f),
+        )
+    }
+}
+
+private const val EMPTY_SHELF_SPOT = "empty-shelf"
 
 /**
  * One mixtape: the cassette, Play and Shuffle, and its items in order — dragged by the handle to

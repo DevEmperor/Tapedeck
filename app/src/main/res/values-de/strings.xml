@@ -204,6 +204,7 @@
     <string name="mixtape_on">Auf Mixtape</string>
     <string name="mixtape_none">Keins</string>
     <string name="drag_to_mixtape">Auf ein Mixtape ziehen</string>
+    <string name="mixtape_empty_hint">Eigene Playlists als Kassetten. Tippe, um eine anzulegen, oder halte unten einen Download gedrückt und lass ihn hier fallen.</string>
     <string name="added_to_mixtape">Zu „%s“ hinzugefügt</string>
     <string name="already_on_mixtape">Schon auf „%s“</string>
     <plurals name="mixtape_titles">

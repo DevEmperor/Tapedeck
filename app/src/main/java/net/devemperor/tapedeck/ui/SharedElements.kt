@@ -61,14 +61,13 @@ fun Modifier.sharedTransition(key: String, visibility: AnimatedVisibilityScope?)
  * player ([away] while the player is open) and back into the card when the player closes.
  */
 @Composable
-fun TravellingThumbnail(entry: Entry, travels: Boolean, away: Boolean, modifier: Modifier = Modifier, corner: Dp = 12.dp, software: Boolean = false) {
+fun TravellingThumbnail(entry: Entry, travels: Boolean, away: Boolean, modifier: Modifier = Modifier, corner: Dp = 12.dp) {
     Box(modifier) {
         AnimatedVisibility(!away, enter = fadeIn(travelSpec()), exit = fadeOut(travelSpec())) {
             Thumbnail(
                 entry,
                 (if (travels) Modifier.sharedTransition(SharedKeys.artwork(entry.id), this) else Modifier).fillMaxSize(),
                 corner = corner,
-                software = software,
             )
         }
     }

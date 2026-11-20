@@ -1,6 +1,11 @@
 package net.devemperor.tapedeck.ui
 
 import android.content.ClipData
+import android.view.View
+import androidx.compose.foundation.gestures.awaitLongPressOrCancellation
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.platform.LocalView
+import net.devemperor.tapedeck.data.Entry
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
@@ -9,7 +14,6 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.draganddrop.dragAndDropSource
 import androidx.compose.foundation.draganddrop.dragAndDropTarget
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -47,7 +51,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draganddrop.DragAndDropEvent
 import androidx.compose.ui.draganddrop.DragAndDropTarget
-import androidx.compose.ui.draganddrop.DragAndDropTransferData
 import androidx.compose.ui.draganddrop.mimeTypes
 import androidx.compose.ui.draganddrop.toAndroidDragEvent
 import androidx.compose.ui.draw.drawWithContent
@@ -95,6 +98,9 @@ class EntryDrag {
     var active by mutableStateOf(false)
     var position by mutableStateOf<Offset?>(null)
 
+    /** The download in hand: its card in the list stays marked while it is dragged. */
+    var held by mutableStateOf<String?>(null)
+
     private class Spot(val bounds: Rect, val onDrop: State<(String) -> Unit>)
 
     private val spots = mutableStateMapOf<Any, Spot>()
@@ -121,11 +127,37 @@ class EntryDrag {
     }
 }
 
-/** A long press lifts the card; it can then be dropped on a cassette of the mixtape shelf. */
-@OptIn(ExperimentalFoundationApi::class)
-fun Modifier.entryDragSource(entryId: String, onStart: () -> Unit): Modifier = dragAndDropSource { _ ->
-    onStart()
-    DragAndDropTransferData(ClipData(DRAG_LABEL, arrayOf(ENTRY_MIME), ClipData.Item(entryId)))
+/**
+ * A long press lifts the card: a compact, opaque copy of it ([EntryDragShadow]) hangs under the finger
+ * and can be dropped on a cassette of the mixtape shelf, while the card itself stays marked as the one in
+ * hand. The drag is started on the view directly: Compose's own drag source can only show the whole wide
+ * card, see-through and wherever it was pressed.
+ */
+@Composable
+fun Modifier.entryDragSource(entry: Entry, drag: EntryDrag): Modifier {
+    val view = LocalView.current
+    val haptic = LocalHapticFeedback.current
+    val scheme = MaterialTheme.colorScheme
+    val colors = ShadowColors(surface = scheme.surfaceContainerHighest.toArgb(), accent = scheme.primary.toArgb(), text = scheme.onSurface.toArgb())
+    val lifted by rememberUpdatedState(entry)
+    val shadowColors by rememberUpdatedState(colors)
+    return pointerInput(drag) {
+        awaitEachGesture {
+            val down = awaitFirstDown(requireUnconsumed = false)
+            // Null when the finger moved (the list scrolls) or let go before the long press.
+            awaitLongPressOrCancellation(down.id) ?: return@awaitEachGesture
+            val inHand = lifted
+            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+            drag.held = inHand.id
+            drag.active = true
+            val clip = ClipData(DRAG_LABEL, arrayOf(ENTRY_MIME), ClipData.Item(inHand.id))
+            val shadow = EntryDragShadow(view.context, inHand, shadowColors)
+            if (!view.startDragAndDrop(clip, shadow, null, View.DRAG_FLAG_OPAQUE)) {
+                drag.active = false
+                drag.held = null
+            }
+        }
+    }
 }
 
 /**
@@ -177,6 +209,7 @@ fun Modifier.entryDragWatcher(drag: EntryDrag): Modifier {
             override fun onEnded(event: DragAndDropEvent) {
                 drag.active = false
                 drag.position = null
+                drag.held = null
             }
             override fun onDrop(event: DragAndDropEvent): Boolean {
                 val id = event.entryId() ?: return false
@@ -215,9 +248,9 @@ enum class DropLook { NONE, READY, HOVER }
  * solid and bold once it is over the spot.
  */
 @Composable
-fun Modifier.dropRing(look: DropLook, color: Color, corner: Dp, inset: Dp = 3.dp): Modifier {
+fun Modifier.dropRing(look: DropLook, color: Color, corner: Dp, inset: Dp = 3.dp, breathing: Boolean = true): Modifier {
     // Only runs while a drag is on, so the shelf does not redraw for nothing the rest of the time.
-    val breath = if (look == DropLook.READY) {
+    val breath = if (look == DropLook.READY && breathing) {
         rememberInfiniteTransition(label = "drop-ring")
             .animateFloat(0.35f, 0.9f, infiniteRepeatable(tween(650), RepeatMode.Reverse), label = "drop-ring-alpha")
     } else null
@@ -227,7 +260,7 @@ fun Modifier.dropRing(look: DropLook, color: Color, corner: Dp, inset: Dp = 3.dp
         val out = inset.toPx()
         val hovered = look == DropLook.HOVER
         drawRoundRect(
-            color = color.copy(alpha = if (hovered) 1f else breath?.value ?: 0.6f),
+            color = if (hovered || breath == null) color else color.copy(alpha = color.alpha * breath.value),
             topLeft = Offset(-out, -out),
             size = Size(size.width + 2 * out, size.height + 2 * out),
             cornerRadius = CornerRadius((corner + inset).toPx()),

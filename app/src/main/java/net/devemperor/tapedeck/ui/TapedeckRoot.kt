@@ -25,12 +25,14 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -53,10 +55,21 @@ fun TapedeckRoot(vm: MainViewModel) {
     // Where the player was opened: a card in a list (its picture travels into the player and back) or,
     // with null, the mini player.
     var playerOrigin by rememberSaveable { mutableStateOf<String?>(null) }
+    // A picture can only travel from where it was seen: the card first takes the travelling key and is
+    // laid out with it, and the player opens a moment later. Opened in the same frame, the flight had no
+    // starting point and the picture appeared at full size at once.
+    var openFromCard by remember { mutableStateOf(false) }
     fun openPlayer(origin: String?, fullscreen: Boolean = false) {
         playerOrigin = origin
         playerFullscreen = fullscreen
+        if (origin != null && screen != Screen.PLAYER) openFromCard = true else screen = Screen.PLAYER
+    }
+    LaunchedEffect(openFromCard) {
+        if (!openFromCard) return@LaunchedEffect
+        withFrameNanos { }
+        withFrameNanos { }
         screen = Screen.PLAYER
+        openFromCard = false
     }
     val sheet by vm.sheet.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
@@ -134,6 +147,12 @@ fun TapedeckRoot(vm: MainViewModel) {
             enter = slideInVertically(travelSpec()) { it } + fadeIn(travelSpec()),
             exit = slideOutVertically(travelSpec()) { it } + fadeOut(travelSpec()),
         ) {
+            // Leaves once the player has slid away and its picture has landed back in the card. Then the card
+            // lets go of the picture, and the mini player is where the player opens from next. (Kept by the
+            // card, its picture went blank as soon as the card changed, e.g. got its progress bar.)
+            DisposableEffect(Unit) {
+                onDispose { if (screen != Screen.PLAYER && !openFromCard) playerOrigin = null }
+            }
             PlayerScreen(vm, startFullscreen = playerFullscreen, visibility = this, onClose = {
                 // Something else plays by now than the card it was opened from: the picture goes back to
                 // the mini player instead.

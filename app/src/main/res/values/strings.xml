@@ -205,6 +205,7 @@
     <string name="mixtape_on">On mixtape</string>
     <string name="mixtape_none">None</string>
     <string name="drag_to_mixtape">Drop on a mixtape</string>
+    <string name="mixtape_empty_hint">Your own playlists, as cassettes. Tap to start one, or press and hold a download below and drop it here.</string>
     <string name="added_to_mixtape">Added to “%s”</string>
     <string name="already_on_mixtape">Already on “%s”</string>
     <plurals name="mixtape_titles">

@@ -4,12 +4,14 @@ import android.app.Activity
 import android.content.Context
 import android.content.pm.ActivityInfo
 import android.provider.Settings
+import android.view.LayoutInflater
 import android.view.OrientationEventListener
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -25,6 +27,7 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -291,7 +294,11 @@ fun PlayerScreen(vm: MainViewModel, startFullscreen: Boolean = false, visibility
                         Modifier.sharedTransition(SharedKeys.artwork(entry.id), visibility)
                             .aspectRatio(aspect).shadow(18.dp, MaterialTheme.shapes.large).clip(MaterialTheme.shapes.large),
                     ) {
-                        VideoSurface(controller, Modifier.fillMaxSize())
+                        VideoSurface(controller, Modifier.fillMaxSize(), texture = true)
+                        VideoCover(
+                            entry, controller, state.isPlaying,
+                            travelling = visibility?.transition?.let { it.currentState != it.targetState } == true,
+                        )
                         // A double tap on the picture goes full screen, as the button does.
                         Box(Modifier.matchParentSize().pointerInput(Unit) { detectTapGestures(onDoubleTap = { enterFullscreen() }) })
                         IconButton(
@@ -573,15 +580,53 @@ private fun SheetSwitch(icon: ImageVector, title: Int, sub: Int, checked: Boolea
     }
 }
 
+/**
+ * The download's picture lying on the video until its first frame is there, and again while the picture
+ * travels into the player or back into its card: the flight shows the picture the card showed, never an
+ * empty black box, and the video fades in once it has a frame.
+ */
+@Composable
+private fun BoxScope.VideoCover(entry: Entry, controller: Player?, playing: Boolean, travelling: Boolean) {
+    var framed by remember(entry.id, controller) { mutableStateOf(false) }
+    DisposableEffect(controller, entry.id) {
+        val listener = object : Player.Listener {
+            override fun onRenderedFirstFrame() {
+                framed = true
+            }
+        }
+        controller?.addListener(listener)
+        onDispose { controller?.removeListener(listener) }
+    }
+    // Should the report of the first frame not come, a moment of playing uncovers the video anyway.
+    LaunchedEffect(playing, entry.id) {
+        if (playing) {
+            delay(1_500)
+            framed = true
+        }
+    }
+    val alpha by animateFloatAsState(if (framed && !travelling) 0f else 1f, tween(if (travelling) 120 else 280), label = "video-cover")
+    if (alpha > 0f) {
+        Thumbnail(entry, Modifier.matchParentSize().alpha(alpha), showDuration = false, showKind = false, corner = 0.dp)
+    }
+}
+
+/**
+ * The video. In the player it is drawn on a TextureView ([texture]), so it moves and scales with the
+ * picture travelling between list and player; full screen keeps the lighter SurfaceView.
+ */
 @androidx.annotation.OptIn(UnstableApi::class)
 @Composable
-private fun VideoSurface(controller: Player?, modifier: Modifier = Modifier) {
+private fun VideoSurface(controller: Player?, modifier: Modifier = Modifier, texture: Boolean = false) {
     AndroidView(
         factory = { context ->
-            PlayerView(context).apply {
-                useController = false
-                resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
-                setShutterBackgroundColor(android.graphics.Color.BLACK)
+            if (texture) {
+                LayoutInflater.from(context).inflate(R.layout.video_texture, null, false) as PlayerView
+            } else {
+                PlayerView(context).apply {
+                    useController = false
+                    resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
+                    setShutterBackgroundColor(android.graphics.Color.BLACK)
+                }
             }
         },
         update = { it.player = controller },

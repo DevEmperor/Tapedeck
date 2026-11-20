@@ -6,6 +6,7 @@ import androidx.compose.animation.Crossfade
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
@@ -14,6 +15,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.animateScrollBy
@@ -109,6 +111,7 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -230,7 +233,7 @@ fun LibraryScreen(
                         },
                         vm = vm,
                         arrived = entry.id in arrived,
-                        onDragStart = { drag.active = true },
+                        drag = drag,
                         travels = playerOrigin == entry.id && openMixtape == null,
                         playerOpen = playerOpen,
                     )
@@ -251,8 +254,9 @@ fun LibraryScreen(
     }
 
     val listState = rememberLazyListState()
-    // The shelf shows while a download is dragged even when it otherwise would not (searching, no mixtapes yet).
-    val showShelf = drag.active || (mixtapes.isNotEmpty() && query.isBlank())
+    // The shelf shows as soon as there is something to put on it — with no mixtapes yet as an empty
+    // cassette that starts one — and while a download is dragged even when searching.
+    val showShelf = drag.active || (query.isBlank() && (mixtapes.isNotEmpty() || done.isNotEmpty()))
     // Its place in the list: the five items at the top, then the downloads with their head. Keep in step with the list.
     val shelfIndex = 5 + if (downloads.isNotEmpty()) downloads.size + 1 else 0
     val density = LocalDensity.current
@@ -844,7 +848,8 @@ private fun EntryCard(
     onPlay: () -> Unit,
     vm: MainViewModel,
     arrived: Boolean = false,
-    onDragStart: () -> Unit = {},
+    /** Drags of downloads onto the mixtape shelf; null where cards cannot be dragged. */
+    drag: EntryDrag? = null,
     /** The player was opened from this card: its picture travels into the player and back. */
     travels: Boolean = false,
     playerOpen: Boolean = false,
@@ -854,35 +859,42 @@ private fun EntryCard(
     val uriHandler = LocalUriHandler.current
     var menu by remember { mutableStateOf(false) }
     var picking by remember { mutableStateOf(false) }
+    // The card in hand while its lifted copy is dragged: outlined in the accent colour, its content faded,
+    // like the empty spot it was lifted from.
+    val inHand = drag?.active == true && drag.held == entry.id
+    val primary = MaterialTheme.colorScheme.primary
     // A download that just landed glows up for a moment.
     val background by animateColorAsState(
         when {
-            arrived -> MaterialTheme.colorScheme.primary.copy(alpha = 0.28f)
+            inHand -> primary.copy(alpha = 0.16f)
+            arrived -> primary.copy(alpha = 0.28f)
             isCurrent -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f)
             else -> Color.Transparent
         },
-        tween(if (arrived) 250 else 900),
+        tween(if (arrived || inHand) 200 else 900),
         label = "entry-background",
     )
+    val ring by animateColorAsState(if (inHand) primary else primary.copy(alpha = 0f), tween(200), label = "entry-ring")
+    val contentAlpha by animateFloatAsState(if (inHand) 0.45f else 1f, tween(200), label = "entry-alpha")
     Box(modifier) {
         Row(
             Modifier.fillMaxWidth()
                 .padding(horizontal = 8.dp, vertical = 2.dp)
                 .clip(MaterialTheme.shapes.medium)
                 .background(background)
+                .border(2.dp, ring, MaterialTheme.shapes.medium)
                 // A long press lifts the card, to drop it on a mixtape (the menu is behind ⋮); a tap plays it.
-                .entryDragSource(entry.id, onDragStart)
+                .then(if (drag != null) Modifier.entryDragSource(entry, drag) else Modifier)
                 .tapLeavingLongPress(onPlay)
+                .graphicsLayer { alpha = contentAlpha }
                 .padding(horizontal = 8.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(Modifier.width(128.dp)) {
                 Box {
-                    // A plain bitmap: the card is draggable, and the drag shadow cannot draw hardware ones.
                     TravellingThumbnail(
                         entry, travels, away = travels && playerOpen,
                         modifier = Modifier.fillMaxWidth().aspectRatio(16f / 9f),
-                        software = true,
                     )
                     if (isCurrent && !(travels && playerOpen)) {
                         Box(

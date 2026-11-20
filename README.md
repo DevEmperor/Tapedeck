@@ -166,10 +166,13 @@ stopped.
 - **One after the other**: *Play* runs a mixtape in its order (and turns into *Pause* / *Resume* while
   it plays), *Shuffle* mixes it, and with *Repeat* it starts over. Drag an item by its handle to move it;
   a download can be on several mixtapes.
-- **Drag onto a mixtape**: press and hold a card in the library and the shelf comes into view, every
-  cassette waiting with a dashed ring; drop the card right on one (it grows and its reels turn when you
-  are over it) or on *New mixtape* in the shelf's head. Hold it near the shelf's edge to reach the
+- **Drag onto a mixtape**: press and hold a card in the library — a small copy of it lifts off and
+  hangs right under your finger, while the card stays marked — and the shelf comes into view, every
+  cassette waiting with a dashed ring; drop it right on one (it grows and its reels turn when you are
+  over it) or on *New mixtape* in the shelf's head. Hold it near the shelf's edge to reach the
   cassettes further along; the list then goes back to where you were.
+- Before the first mixtape, the shelf shows an empty cassette: tap it to start one, or drop a download on
+  it.
 - **Straight onto a mixtape** when downloading — and a whole YouTube playlist can become a new mixtape
   of its own name, in the playlist's order.
 - What is on a mixtape is never removed by the automatic clean-up (a setting, on by default). Deleting a
