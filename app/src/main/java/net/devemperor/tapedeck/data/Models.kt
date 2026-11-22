@@ -81,6 +81,8 @@ data class Entry(
     val videoHeight: Int? = null,
     /** May load over mobile data although "Wi-Fi only" is on: the user said so for this download. */
     val mobileData: Boolean = false,
+    /** The subscribed mixtape this was downloaded for, by itself: it counts towards that subscription's limit. */
+    val subscription: String? = null,
 ) {
     val isDone get() = state == DownloadState.DONE && mediaFile != null
     val isActive get() = state == DownloadState.QUEUED || state == DownloadState.WAITING_NETWORK || state == DownloadState.RUNNING
@@ -109,7 +111,36 @@ data class Mixtape(
     /** Index into the cassette colours, so every mixtape keeps its look. */
     val color: Int = 0,
     val createdAt: Long,
+    /** A channel or playlist that fills this mixtape by itself; null for one put together by hand. */
+    val subscription: Subscription? = null,
 )
+
+/**
+ * A channel or playlist subscribed to: every few hours Tapedeck looks for new videos and downloads them
+ * onto the mixtape it belongs to. Once there are more than [keep] finished downloads of it, the oldest
+ * make room (not those kept by hand).
+ */
+@Serializable
+data class Subscription(
+    /** What is looked at: a YouTube channel's videos (newest first) or a playlist (in its own order). */
+    val url: String,
+    val playlist: Boolean = false,
+    /** Audio or video, format and quality of its downloads. */
+    val options: DownloadOptions = DownloadOptions(),
+    /** How many of its downloads are kept at most; 0 keeps all. */
+    val keep: Int = DEFAULT_KEEP_CHANNEL,
+    /** The videos seen already (downloaded or passed over as older), so each one is fetched only once. */
+    val known: List<String> = emptyList(),
+    val lastCheckAt: Long = 0,
+    /** Why the last look failed, if it did. */
+    val lastError: String? = null,
+) {
+    companion object {
+        const val DEFAULT_KEEP_CHANNEL = 5
+        const val DEFAULT_KEEP_PLAYLIST = 0
+        const val MAX_KEEP = 50
+    }
+}
 
 @Serializable
 data class LibraryFile(val version: Int = 1, val entries: List<Entry> = emptyList(), val mixtapes: List<Mixtape> = emptyList())

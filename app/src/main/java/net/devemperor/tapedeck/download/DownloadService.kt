@@ -48,6 +48,7 @@ import net.devemperor.tapedeck.engine.MediaInfo
 import net.devemperor.tapedeck.engine.ProgressTracker
 import net.devemperor.tapedeck.engine.YtDlpArgs
 import net.devemperor.tapedeck.engine.YtDlpOutput
+import net.devemperor.tapedeck.work.Subscriptions
 import java.io.File
 import kotlin.math.roundToInt
 
@@ -251,6 +252,9 @@ class DownloadService : LifecycleService() {
         }
         app.library.saveNow()
         app.library[id]?.let(::notifyDone)
+        // A new video of a subscription is here: now the oldest beyond its limit make room (not before, so a
+        // failed download never costs an old one).
+        entry.subscription?.let { Subscriptions.rotate(app, it) }
     }
 
     private fun fail(id: String, e: Exception) {

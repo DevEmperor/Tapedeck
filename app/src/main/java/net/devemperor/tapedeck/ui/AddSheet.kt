@@ -48,6 +48,7 @@ import androidx.compose.material.icons.rounded.Headphones
 import androidx.compose.material.icons.rounded.LibraryMusic
 import androidx.compose.material.icons.rounded.Link
 import androidx.compose.material.icons.rounded.Movie
+import androidx.compose.material.icons.rounded.RssFeed
 import androidx.compose.material.icons.rounded.SignalCellularAlt
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -91,6 +92,7 @@ import net.devemperor.tapedeck.data.AudioQuality
 import net.devemperor.tapedeck.data.DownloadOptions
 import net.devemperor.tapedeck.data.MediaKind
 import net.devemperor.tapedeck.data.Mixtape
+import net.devemperor.tapedeck.data.Subscription
 import net.devemperor.tapedeck.data.VideoFormat
 import net.devemperor.tapedeck.engine.MediaFormat
 
@@ -112,6 +114,9 @@ fun AddSheet(
     onMixtape: (String?, String?) -> Unit,
     offerMobileData: Boolean,
     onMobileData: (Boolean) -> Unit,
+    onSubscribe: (Boolean) -> Unit,
+    onKeep: (Int) -> Unit,
+    onLoadNow: (Int) -> Unit,
     onConfirm: () -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -132,7 +137,7 @@ fun AddSheet(
             } else {
                 OptionsPage(
                     state, onUrl, onOptions, onWholePlaylist, onOpenFormats, onClearCustom, mixtapes, onMixtape,
-                    offerMobileData, onMobileData, onConfirm,
+                    offerMobileData, onMobileData, onSubscribe, onKeep, onLoadNow, onConfirm,
                 )
             }
         }
@@ -151,6 +156,9 @@ private fun OptionsPage(
     onMixtape: (String?, String?) -> Unit,
     offerMobileData: Boolean,
     onMobileData: (Boolean) -> Unit,
+    onSubscribe: (Boolean) -> Unit,
+    onKeep: (Int) -> Unit,
+    onLoadNow: (Int) -> Unit,
     onConfirm: () -> Unit,
 ) {
     run {
@@ -199,8 +207,15 @@ private fun OptionsPage(
                 }
             }
 
+            if (state.isChannel) {
+                ChannelRow(state)
+            }
+
             if (state.playlistId != null) {
                 PlaylistRow(state, onWholePlaylist)
+                AnimatedVisibility(state.wholePlaylist, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
+                    SubscribeRow(state.subscribe, onSubscribe)
+                }
             }
 
             Spacer(Modifier.height(18.dp))
@@ -289,7 +304,14 @@ private fun OptionsPage(
                 }
             }
 
-            MixtapeChoice(state, mixtapes, onMixtape)
+            // A subscription brings its own mixtape (named after the channel or playlist); instead it asks how
+            // many downloads to keep and, for a channel, how many of the newest to load right away.
+            val subscribing = state.isChannel || (state.wholePlaylist && state.subscribe)
+            if (subscribing) {
+                SubscriptionChoice(state, onKeep, onLoadNow)
+            } else {
+                MixtapeChoice(state, mixtapes, onMixtape)
+            }
 
             AnimatedVisibility(offerMobileData, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
                 MobileDataRow(state.mobileData, onMobileData)
@@ -303,11 +325,15 @@ private fun OptionsPage(
                 shape = RoundedCornerShape(18.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
             ) {
-                Icon(Icons.Rounded.Download, null)
+                Icon(if (subscribing) Icons.Rounded.RssFeed else Icons.Rounded.Download, null)
                 Spacer(Modifier.width(10.dp))
                 val count = state.playlist?.items?.size ?: 0
                 Text(
-                    if (state.wholePlaylist && count > 0) pluralStringResource(R.plurals.download_n, count, count) else stringResource(R.string.download),
+                    when {
+                        subscribing -> stringResource(R.string.subscribe)
+                        state.wholePlaylist && count > 0 -> pluralStringResource(R.plurals.download_n, count, count)
+                        else -> stringResource(R.string.download)
+                    },
                     style = MaterialTheme.typography.titleMedium,
                 )
             }
@@ -402,6 +428,95 @@ private fun PlaylistRow(state: AddSheetState, onWholePlaylist: (Boolean) -> Unit
             }
             Switch(checked = state.wholePlaylist, onCheckedChange = onWholePlaylist)
         }
+    }
+}
+
+/** A channel link: subscribing to its videos, with its name and how many were read. */
+@Composable
+private fun ChannelRow(state: AddSheetState) {
+    Surface(
+        color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.6f),
+        shape = MaterialTheme.shapes.large,
+        modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
+    ) {
+        Row(Modifier.padding(horizontal = 14.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Rounded.RssFeed, null, tint = MaterialTheme.colorScheme.onSecondaryContainer)
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text(stringResource(R.string.subscribe_channel), style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSecondaryContainer)
+                Text(
+                    when {
+                        state.loadingChannel -> stringResource(R.string.subscribe_channel_loading)
+                        state.channelFailed -> stringResource(R.string.subscribe_channel_failed)
+                        else -> stringResource(R.string.subscribe_channel_hint)
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (state.channelFailed) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.8f),
+                )
+            }
+            if (state.loadingChannel) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
+        }
+    }
+}
+
+/** Under a whole playlist: "Keep it up to date" — its new videos come by themselves later (a subscription). */
+@Composable
+private fun SubscribeRow(on: Boolean, onChange: (Boolean) -> Unit) {
+    Surface(
+        shape = MaterialTheme.shapes.medium,
+        color = if (on) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceContainerHigh,
+        modifier = Modifier.fillMaxWidth().padding(top = 8.dp).clip(MaterialTheme.shapes.medium).toggleable(on, onValueChange = onChange),
+    ) {
+        Row(Modifier.padding(start = 14.dp, end = 12.dp, top = 10.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Rounded.RssFeed, null, tint = MaterialTheme.colorScheme.secondary, modifier = Modifier.size(20.dp))
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text(stringResource(R.string.playlist_subscribe), style = MaterialTheme.typography.titleSmall)
+                Text(stringResource(R.string.playlist_subscribe_sub), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Spacer(Modifier.width(8.dp))
+            Switch(checked = on, onCheckedChange = null)
+        }
+    }
+}
+
+/** How many downloads a subscription keeps (older ones make room), and for a channel how many load now. */
+@Composable
+private fun SubscriptionChoice(state: AddSheetState, onKeep: (Int) -> Unit, onLoadNow: (Int) -> Unit) {
+    var picking by remember { mutableStateOf(false) }
+    val keepLabel: @Composable (Int) -> String = { n -> if (n <= 0) stringResource(R.string.subscription_keep_all) else pluralStringResource(R.plurals.videos, n, n) }
+    Row(Modifier.fillMaxWidth().padding(top = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text(stringResource(R.string.subscription_keep), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(stringResource(R.string.subscription_keep_sub), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f))
+        }
+        Spacer(Modifier.width(12.dp))
+        Surface(onClick = { picking = true }, shape = CircleShape, color = MaterialTheme.colorScheme.primaryContainer) {
+            Row(Modifier.padding(start = 14.dp, end = 8.dp, top = 8.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(keepLabel(state.keep), style = MaterialTheme.typography.labelLarge)
+                Icon(Icons.Rounded.ArrowDropDown, null)
+            }
+        }
+    }
+    if (state.isChannel) {
+        Spacer(Modifier.height(10.dp))
+        OptionLabel(R.string.subscription_now)
+        ChipRow {
+            Chip(stringResource(R.string.subscription_now_none), state.loadNow == 0) { onLoadNow(0) }
+            Chip(stringResource(R.string.subscription_now_newest), state.loadNow == 1) { onLoadNow(1) }
+            val most = state.keep.takeIf { it > 1 } ?: (state.channel?.items?.size ?: 0).takeIf { state.keep <= 0 && it > 1 }
+            if (most != null) Chip(pluralStringResource(R.plurals.subscription_now_up_to, most, most), state.loadNow == most) { onLoadNow(most) }
+        }
+    }
+    if (picking) {
+        WheelPickerDialog(
+            title = stringResource(R.string.subscription_keep),
+            items = (1..Subscription.MAX_KEEP).toList() + 0,
+            current = state.keep,
+            label = keepLabel,
+            onConfirm = { onKeep(it); picking = false },
+            onDismiss = { picking = false },
+        )
     }
 }
 

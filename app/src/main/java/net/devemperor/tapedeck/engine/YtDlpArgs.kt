@@ -97,7 +97,9 @@ object YtDlpArgs {
     }
 
     /** Lists a playlist's videos without resolving any of them (fast, no JavaScript challenge). */
-    fun playlist(): List<String> = listOf("--flat-playlist", "--yes-playlist", "-J")
+    /** The items of a playlist or channel without opening each video; [limit] only the first so many (a channel's newest). */
+    fun playlist(limit: Int? = null): List<String> =
+        listOf("--flat-playlist", "--yes-playlist", "-J") + (limit?.let { listOf("--playlist-end", it.toString()) } ?: emptyList())
 
     /** Everything yt-dlp knows about one video, formats included, without downloading it. */
     fun inspect(): List<String> = listOf("--no-playlist", "-J")

@@ -205,6 +205,62 @@
     <string name="mixtape_on">On mixtape</string>
     <string name="mixtape_none">None</string>
     <string name="drag_to_mixtape">Drop on a mixtape</string>
+    <string name="subscribe_channel">Subscribe to this channel</string>
+    <string name="subscribe_channel_loading">Reading the channel…</string>
+    <string name="subscribe_channel_failed">The channel could not be read</string>
+    <string name="subscribe_channel_hint">Its new videos download by themselves onto a mixtape of its own.</string>
+    <string name="subscribe">Subscribe</string>
+    <string name="subscribed_message">Subscribed to “%s”</string>
+    <string name="playlist_subscribe">Keep it up to date</string>
+    <string name="playlist_subscribe_sub">New videos of the playlist download by themselves</string>
+    <string name="subscription_keep">Keep the newest</string>
+    <string name="subscription_keep_sub">Older ones make room for new ones; kept ones stay.</string>
+    <string name="subscription_keep_all">All</string>
+    <string name="subscription_now">Load now</string>
+    <string name="subscription_now_none">Nothing</string>
+    <string name="subscription_now_newest">The newest</string>
+    <plurals name="subscription_now_up_to">
+        <item quantity="one">The newest %d</item>
+        <item quantity="other">The newest %d</item>
+    </plurals>
+    <string name="subscription_title">Subscribed</string>
+    <plurals name="subscription_every">
+        <item quantity="one">Looks for new videos every hour</item>
+        <item quantity="other">Looks for new videos every %d hours</item>
+    </plurals>
+    <plurals name="subscription_keeps">
+        <item quantity="one">keeps the newest one</item>
+        <item quantity="other">keeps the newest %d</item>
+    </plurals>
+    <string name="subscription_keeps_all">keeps all</string>
+    <string name="subscription_last">Last look %s</string>
+    <string name="subscription_failed">Last look failed: %s</string>
+    <string name="subscription_check_now">Look now</string>
+    <plurals name="subscription_found">
+        <item quantity="one">%d new video</item>
+        <item quantity="other">%d new videos</item>
+    </plurals>
+    <string name="subscription_nothing">Nothing new</string>
+    <string name="subscription_settings">Subscription</string>
+    <string name="subscription_unsubscribe">Unsubscribe</string>
+    <string name="subscription_unsubscribe_body">The mixtape and its downloads stay; only nothing new comes in any more.</string>
+    <string name="subscription_battery">So that new videos also download in the background, Tapedeck has to be allowed to run unrestricted.</string>
+    <string name="subscription_battery_allow">Allow</string>
+    <plurals name="subscription_waiting_title">
+        <item quantity="one">%d new video from your subscriptions</item>
+        <item quantity="other">%d new videos from your subscriptions</item>
+    </plurals>
+    <string name="subscription_waiting_body">From %s — open Tapedeck to download.</string>
+    <string name="group_subscriptions">Subscriptions</string>
+    <string name="setting_subscription_hours">Look for new videos every</string>
+    <string name="setting_subscription_hours_sub">With “Wi-Fi only”, on Wi-Fi only</string>
+    <plurals name="hours_n">
+        <item quantity="one">%d hour</item>
+        <item quantity="other">%d hours</item>
+    </plurals>
+    <string name="setting_background">Download in the background</string>
+    <string name="setting_background_on">Allowed: subscriptions download by themselves</string>
+    <string name="setting_background_off">Held back by battery saving: new videos wait until Tapedeck is opened</string>
     <string name="mixtape_empty_hint">Your own playlists, as cassettes. Tap to start one, or press and hold a download below and drop it here.</string>
     <string name="added_to_mixtape">Added to “%s”</string>
     <string name="already_on_mixtape">Already on “%s”</string>

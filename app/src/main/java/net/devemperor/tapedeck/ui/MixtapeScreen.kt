@@ -48,7 +48,19 @@ import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.RssFeed
 import androidx.compose.material.icons.rounded.Shuffle
+import androidx.compose.material.icons.rounded.Tune
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.Surface
+import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.compose.LifecycleResumeEffect
+import net.devemperor.tapedeck.data.MediaKind
+import net.devemperor.tapedeck.data.Subscription
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
@@ -229,13 +241,19 @@ fun MixtapeShelf(
                         },
                     )
                     Spacer(Modifier.height(6.dp))
-                    Text(
-                        mixtapeSummary(tape, byId),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        modifier = Modifier.padding(horizontal = 2.dp),
-                    )
+                    Row(Modifier.padding(horizontal = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+                        // A subscribed mixtape fills itself: the feed sign before its count says so.
+                        if (tape.subscription != null) {
+                            Icon(Icons.Rounded.RssFeed, stringResource(R.string.subscription_title), tint = mixtapeColor(tape.color), modifier = Modifier.size(13.dp))
+                            Spacer(Modifier.width(4.dp))
+                        }
+                        Text(
+                            mixtapeSummary(tape, byId),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                        )
+                    }
                 }
             }
         }
@@ -334,6 +352,7 @@ fun MixtapeScreen(
     var menu by remember { mutableStateOf(false) }
     var renaming by remember { mutableStateOf(false) }
     var deleting by remember { mutableStateOf(false) }
+    var unsubscribing by remember { mutableStateOf(false) }
 
     // Reordering happens on a local copy and is saved when the finger lifts.
     val order = remember(tape.entryIds) { tape.entryIds.filter { it in byId }.toMutableStateList() }
@@ -370,6 +389,13 @@ fun MixtapeScreen(
                             leadingIcon = { Icon(Icons.Rounded.Edit, null) },
                             onClick = { menu = false; renaming = true },
                         )
+                        if (tape.subscription != null) {
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.subscription_unsubscribe)) },
+                                leadingIcon = { Icon(Icons.Rounded.RssFeed, null) },
+                                onClick = { menu = false; unsubscribing = true },
+                            )
+                        }
                         DropdownMenuItem(
                             text = { Text(stringResource(R.string.mixtape_delete)) },
                             leadingIcon = { Icon(Icons.Rounded.Close, null) },
@@ -427,6 +453,10 @@ fun MixtapeScreen(
                                 Spacer(Modifier.width(6.dp))
                                 Text(stringResource(R.string.mixtape_shuffle))
                             }
+                        }
+                        tape.subscription?.let { subscription ->
+                            Spacer(Modifier.height(16.dp))
+                            SubscriptionCard(vm, tape.id, subscription, color)
                         }
                         Spacer(Modifier.height(10.dp))
                     }
@@ -604,6 +634,135 @@ fun MixtapeScreen(
                 }) { Text(stringResource(R.string.delete)) }
             },
             dismissButton = { TextButton(onClick = { deleting = false }) { Text(stringResource(R.string.cancel)) } },
+        )
+    }
+    if (unsubscribing) {
+        AlertDialog(
+            onDismissRequest = { unsubscribing = false },
+            title = { Text(stringResource(R.string.subscription_unsubscribe)) },
+            text = { Text(stringResource(R.string.subscription_unsubscribe_body)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    unsubscribing = false
+                    vm.unsubscribe(tape.id)
+                }) { Text(stringResource(R.string.subscription_unsubscribe)) }
+            },
+            dismissButton = { TextButton(onClick = { unsubscribing = false }) { Text(stringResource(R.string.cancel)) } },
+        )
+    }
+}
+
+/**
+ * A subscribed mixtape's subscription: how often it looks and how many it keeps, when it last looked (or
+ * why that failed), "Look now", its settings — and, if Android holds Tapedeck back in the background, a
+ * word on that with the way to allow it.
+ */
+@Composable
+private fun SubscriptionCard(vm: MainViewModel, mixtapeId: String, subscription: Subscription, color: Color) {
+    val context = LocalContext.current
+    val settings by vm.settings.collectAsStateWithLifecycle()
+    val checking by vm.checking.collectAsStateWithLifecycle()
+    var editing by remember { mutableStateOf(false) }
+    // Asked again whenever the page comes back (the user may just have allowed it in Android's dialog).
+    var allowed by remember { mutableStateOf(vm.backgroundAllowed()) }
+    LifecycleResumeEffect(Unit) {
+        allowed = vm.backgroundAllowed()
+        onPauseOrDispose { }
+    }
+    val hours = settings.subscriptionHours
+    Surface(color = color.copy(alpha = 0.14f), shape = MaterialTheme.shapes.large, modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(start = 16.dp, end = 8.dp, top = 12.dp, bottom = 4.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Rounded.RssFeed, null, tint = color, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Text(stringResource(R.string.subscription_title), style = MaterialTheme.typography.titleSmall, color = color, modifier = Modifier.weight(1f))
+                IconButton(onClick = { editing = true }) { Icon(Icons.Rounded.Tune, stringResource(R.string.subscription_settings)) }
+            }
+            val keeps = if (subscription.keep > 0) pluralStringResource(R.plurals.subscription_keeps, subscription.keep, subscription.keep) else stringResource(R.string.subscription_keeps_all)
+            Text(
+                pluralStringResource(R.plurals.subscription_every, hours, hours) + ", " + keeps,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            val error = subscription.lastError
+            Text(
+                when {
+                    error != null -> stringResource(R.string.subscription_failed, stringResource(errorText(error)))
+                    subscription.lastCheckAt > 0 -> stringResource(R.string.subscription_last, Format.relative(context, subscription.lastCheckAt))
+                    else -> ""
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = if (error != null) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
+            )
+            if (!allowed) {
+                Spacer(Modifier.height(6.dp))
+                Text(stringResource(R.string.subscription_battery), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface)
+            }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
+                if (!allowed) {
+                    TextButton(onClick = { runCatching { context.startActivity(vm.backgroundPermissionIntent()) } }) {
+                        Text(stringResource(R.string.subscription_battery_allow))
+                    }
+                }
+                val busy = mixtapeId in checking
+                TextButton(onClick = { vm.checkSubscription(mixtapeId) }, enabled = !busy) {
+                    if (busy) {
+                        CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
+                    } else {
+                        Icon(Icons.Rounded.Refresh, null, Modifier.size(18.dp))
+                    }
+                    Spacer(Modifier.width(6.dp))
+                    Text(stringResource(R.string.subscription_check_now))
+                }
+            }
+        }
+    }
+    if (editing) SubscriptionDialog(vm, mixtapeId, subscription, onDismiss = { editing = false })
+}
+
+/** A subscription's settings: how many of its downloads it keeps, and audio or video from now on. */
+@Composable
+private fun SubscriptionDialog(vm: MainViewModel, mixtapeId: String, subscription: Subscription, onDismiss: () -> Unit) {
+    var picking by remember { mutableStateOf(false) }
+    val keepLabel: @Composable (Int) -> String = { n -> if (n <= 0) stringResource(R.string.subscription_keep_all) else pluralStringResource(R.plurals.videos, n, n) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.subscription_settings)) },
+        text = {
+            Column {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text(stringResource(R.string.subscription_keep), style = MaterialTheme.typography.titleSmall)
+                        Text(stringResource(R.string.subscription_keep_sub), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    Spacer(Modifier.width(8.dp))
+                    FilledTonalButton(onClick = { picking = true }) { Text(keepLabel(subscription.keep)) }
+                }
+                Spacer(Modifier.height(16.dp))
+                SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+                    SegmentedButton(
+                        selected = subscription.options.kind == MediaKind.AUDIO,
+                        onClick = { vm.setSubscriptionKind(mixtapeId, MediaKind.AUDIO) },
+                        shape = SegmentedButtonDefaults.itemShape(0, 2),
+                    ) { Text(stringResource(R.string.kind_audio)) }
+                    SegmentedButton(
+                        selected = subscription.options.kind == MediaKind.VIDEO,
+                        onClick = { vm.setSubscriptionKind(mixtapeId, MediaKind.VIDEO) },
+                        shape = SegmentedButtonDefaults.itemShape(1, 2),
+                    ) { Text(stringResource(R.string.kind_video)) }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.ok)) } },
+    )
+    if (picking) {
+        WheelPickerDialog(
+            title = stringResource(R.string.subscription_keep),
+            items = (1..Subscription.MAX_KEEP).toList() + 0,
+            current = subscription.keep,
+            label = keepLabel,
+            onConfirm = { vm.setSubscriptionKeep(mixtapeId, it); picking = false },
+            onDismiss = { picking = false },
         )
     }
 }

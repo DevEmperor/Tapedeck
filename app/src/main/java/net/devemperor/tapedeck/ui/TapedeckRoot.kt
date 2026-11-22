@@ -193,6 +193,9 @@ fun TapedeckRoot(vm: MainViewModel) {
             offerMobileData = vm.settings.collectAsStateWithLifecycle().value.wifiOnly &&
                 vm.network.collectAsStateWithLifecycle().value.onMobileData,
             onMobileData = vm::setSheetMobileData,
+            onSubscribe = vm::setSheetSubscribe,
+            onKeep = vm::setSheetKeep,
+            onLoadNow = vm::setSheetLoadNow,
             onConfirm = {
                 askForNotifications()
                 vm.confirmSheet()

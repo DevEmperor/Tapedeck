@@ -10,6 +10,9 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <!-- Subscriptions download in the background; Android 12+ allows starting the download service from
+         there only when Tapedeck may run unrestricted, which the app asks for (it is not on Play). -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     <!-- Tapedeck updates itself from its GitHub releases (only when the user taps "Install"). -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 

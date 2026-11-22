@@ -29,6 +29,8 @@ data class NewDownload(
     val durationMs: Long = 0,
     /** Load over mobile data even with "Wi-Fi only" on. */
     val mobileData: Boolean = false,
+    /** The subscribed mixtape it is fetched for by itself. */
+    val subscription: String? = null,
 )
 
 /** What the UI calls to start, stop and remove downloads; [DownloadService] does the work. */
@@ -36,7 +38,8 @@ class Downloads(private val app: TapedeckApp, private val scope: CoroutineScope)
     private val _live = MutableStateFlow<Map<String, LiveProgress>>(emptyMap())
     val live: StateFlow<Map<String, LiveProgress>> = _live.asStateFlow()
 
-    fun enqueue(requests: List<NewDownload>): List<Entry> {
+    /** Puts the downloads into the queue; [start] the download service right away (subscriptions start it themselves). */
+    fun enqueue(requests: List<NewDownload>, start: Boolean = true): List<Entry> {
         val now = System.currentTimeMillis()
         val entries = requests.mapIndexed { index, request ->
             val url = Links.clean(request.url)
@@ -51,10 +54,11 @@ class Downloads(private val app: TapedeckApp, private val scope: CoroutineScope)
                 // Keeps a playlist in its own order in the queue.
                 createdAt = now + index,
                 mobileData = request.mobileData,
+                subscription = request.subscription,
             )
         }
         app.library.add(entries.reversed())
-        start()
+        if (start) start()
         return entries
     }
 

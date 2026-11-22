@@ -14,6 +14,7 @@ import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import net.devemperor.tapedeck.ui.MainViewModel
 import net.devemperor.tapedeck.ui.TapedeckRoot
 import net.devemperor.tapedeck.ui.theme.TapedeckTheme
+import net.devemperor.tapedeck.work.Subscriptions
 
 class MainActivity : ComponentActivity() {
     private val vm: MainViewModel by viewModels()
@@ -66,6 +67,8 @@ class MainActivity : ComponentActivity() {
     private fun handleIntent(intent: Intent?) {
         // Emulator tests: Genymotion mirrors its clipboard to the host's, so tests hand a "copied" link in here.
         if (BuildConfig.DEBUG) intent?.getStringExtra(DEBUG_CLIP)?.let(vm::considerClipText)
+        // Emulator tests: a subscription look in so many seconds, by when the app is in the background.
+        if (BuildConfig.DEBUG) intent?.getIntExtra(DEBUG_CHECK, 0)?.takeIf { it > 0 }?.let { Subscriptions.checkSoon(this, it.toLong()) }
         if (intent?.action != Intent.ACTION_SEND) return
         val text = intent.getStringExtra(Intent.EXTRA_TEXT) ?: intent.getStringExtra(Intent.EXTRA_SUBJECT) ?: return
         vm.onShared(text)
@@ -75,5 +78,6 @@ class MainActivity : ComponentActivity() {
 
     private companion object {
         const val DEBUG_CLIP = "tapedeck.debug.clip"
+        const val DEBUG_CHECK = "tapedeck.debug.check"
     }
 }

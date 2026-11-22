@@ -190,11 +190,11 @@ object Engine {
         }
     }
 
-    suspend fun fetchPlaylist(context: Context, url: String): Playlist {
+    suspend fun fetchPlaylist(context: Context, url: String, limit: Int? = null): Playlist {
         ensureInitialized(context)
         val request = YoutubeDLRequest(url)
             .addOption("--cache-dir", cacheDir(context).absolutePath)
-            .addCommands(YtDlpArgs.playlist())
+            .addCommands(YtDlpArgs.playlist(limit))
         val response = withYtDlp { YoutubeDL.execute(request) }
         return InfoJson.parsePlaylist(response.out)
     }

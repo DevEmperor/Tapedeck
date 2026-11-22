@@ -52,6 +52,7 @@ import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import net.devemperor.tapedeck.BuildConfig
 import net.devemperor.tapedeck.Format
@@ -115,6 +116,32 @@ fun SettingsScreen(vm: MainViewModel, onBack: () -> Unit) {
                     SwitchRow(R.string.setting_sponsorblock, R.string.setting_sponsorblock_sub, settings.sponsorBlock, last = true) { on ->
                         vm.updateSettings { it.copy(sponsorBlock = on) }
                     }
+                }
+                // Subscriptions: how often they look for new videos, and whether Android lets them download in
+                // the background (asked again whenever the screen comes back from Android's dialog).
+                Group(R.string.group_subscriptions) {
+                    WheelRow(
+                        title = R.string.setting_subscription_hours,
+                        sub = stringResource(R.string.setting_subscription_hours_sub),
+                        current = settings.subscriptionHours,
+                        items = AppSettings.SUBSCRIPTION_HOURS,
+                        label = { pluralStringResource(R.plurals.hours_n, it, it) },
+                    ) { value -> vm.updateSettings { it.copy(subscriptionHours = value) } }
+                    var allowed by remember { mutableStateOf(vm.backgroundAllowed()) }
+                    LifecycleResumeEffect(Unit) {
+                        allowed = vm.backgroundAllowed()
+                        onPauseOrDispose { }
+                    }
+                    ActionRow(
+                        stringResource(R.string.setting_background),
+                        stringResource(if (allowed) R.string.setting_background_on else R.string.setting_background_off),
+                        last = true,
+                        trailing = {
+                            if (!allowed) FilledTonalButton(onClick = { runCatching { context.startActivity(vm.backgroundPermissionIntent()) } }) {
+                                Text(stringResource(R.string.subscription_battery_allow))
+                            }
+                        },
+                    ) { if (!allowed) runCatching { context.startActivity(vm.backgroundPermissionIntent()) } }
                 }
                 // The defaults the download sheet starts with; Audio or Video itself is picked there each time.
                 Group(R.string.kind_audio) {

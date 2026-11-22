@@ -69,7 +69,7 @@ class Library(private val file: File, scope: CoroutineScope) {
     /** Downloads on any mixtape: the clean-up leaves them alone, like kept ones. */
     fun onMixtapes(): Set<String> = _mixtapes.value.flatMapTo(HashSet()) { it.entryIds }
 
-    fun createMixtape(name: String, entryIds: List<String> = emptyList()): Mixtape {
+    fun createMixtape(name: String, entryIds: List<String> = emptyList(), subscription: Subscription? = null): Mixtape {
         val tape = Mixtape(
             id = UUID.randomUUID().toString(),
             name = name.trim().ifEmpty { "Mixtape" },
@@ -77,6 +77,7 @@ class Library(private val file: File, scope: CoroutineScope) {
             // The next colour along, so neighbouring cassettes on the shelf look different.
             color = (_mixtapes.value.maxOfOrNull { it.color + 1 } ?: 0) % MIXTAPE_COLORS,
             createdAt = System.currentTimeMillis(),
+            subscription = subscription,
         )
         _mixtapes.update { it + tape }
         saveRequests.tryEmit(Unit)
@@ -87,6 +88,10 @@ class Library(private val file: File, scope: CoroutineScope) {
         _mixtapes.update { tapes -> tapes.map { if (it.id == id) transform(it) else it } }
         saveRequests.tryEmit(Unit)
     }
+
+    /** Changes the subscription of a subscribed mixtape (nothing for one put together by hand). */
+    fun updateSubscription(id: String, transform: (Subscription) -> Subscription) =
+        updateMixtape(id) { tape -> tape.copy(subscription = tape.subscription?.let(transform)) }
 
     fun deleteMixtape(id: String) {
         _mixtapes.update { tapes -> tapes.filterNot { it.id == id } }

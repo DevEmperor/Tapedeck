@@ -82,6 +82,28 @@ object Links {
 
     fun isPlaylistOnly(url: String): Boolean = playlistId(url) != null && videoId(url) == null
 
+    /** A link to a playlist itself, for looking at it again later. */
+    fun playlistUrl(id: String) = "https://www.youtube.com/playlist?list=$id"
+
+    /**
+     * The videos of the YouTube channel a link points to (youtube.com/@name, /channel/UC…, /c/…, /user/…,
+     * any of its tabs), as the link to its "Videos" tab — newest first, without Shorts and streams. Null
+     * for anything else.
+     */
+    fun channelVideosUrl(url: String): String? {
+        val uri = parse(url) ?: return null
+        if (uri.host?.lowercase() !in youtubeHosts || uri.host?.lowercase()?.endsWith("youtu.be") == true) return null
+        if (videoId(url) != null || playlistId(url) != null) return null
+        val segments = uri.path.orEmpty().split('/').filter { it.isNotEmpty() }
+        val first = segments.firstOrNull() ?: return null
+        val base = when {
+            first.startsWith("@") && first.length > 1 -> listOf(first)
+            first in setOf("channel", "c", "user") && segments.size >= 2 -> segments.take(2)
+            else -> return null
+        }
+        return "https://www.youtube.com/" + base.joinToString("/") + "/videos"
+    }
+
     /** A canonical, tracking-free link: youtu.be and shorts become watch?v=, a timestamp is kept. */
     fun clean(url: String): String {
         val uri = parse(url) ?: return url

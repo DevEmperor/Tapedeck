@@ -109,7 +109,8 @@ stopped.
   stream gets the best sound to go with it, which you can change; the sheet shows the total size.
 - Audio and video have **their own defaults** in the settings; the sheet remembers whether you last chose
   audio or video.
-- **Whole playlists** in one go: share a playlist and get every video, in order.
+- **Whole playlists** in one go: share a playlist and get every video, in order — as a mixtape of its own
+  name.
 - **A real download manager.** A queue with 1–5 downloads at a time, a progress bar with speed and time
   left — for a video it says whether the picture or the sound is coming in, and the bar weighs both by
   their real sizes — a notification, and readable errors (unavailable, private, age-restricted, no
@@ -174,11 +175,26 @@ stopped.
   cassettes further along; the list then goes back to where you were.
 - Before the first mixtape, the shelf shows an empty cassette: tap it to start one, or drop a download on
   it.
-- **Straight onto a mixtape** when downloading — and a whole YouTube playlist can become a new mixtape
-  of its own name, in the playlist's order.
+- **Straight onto a mixtape** when downloading — and a whole YouTube playlist becomes a new mixtape of
+  its own name, in the playlist's order.
 - What is on a mixtape is never removed by the automatic clean-up (a setting, on by default). Deleting a
   mixtape keeps its downloads.
 - In **Android Auto**, every mixtape is a folder; picking an item plays the mixtape from there.
+
+### Subscriptions
+
+- **A cassette that fills itself.** Share a YouTube channel (or a whole playlist and switch on *Keep it
+  up to date*) and subscribe: it gets a mixtape of its own on the shelf, marked with a feed sign.
+- **New videos come by themselves.** Every few hours — 1 to 24, as you like; on Wi-Fi with *Wi-Fi only*
+  — Tapedeck looks for new videos and downloads them in your chosen format: a channel's newest on top, a
+  playlist's in its order. *Look now* on the mixtape's page doesn't wait.
+- **A limit per subscription**: it keeps the newest 1 to 50 downloads (or all); once a new one is
+  finished, the oldest makes room. Kept downloads stay, and so does one taken off the mixtape.
+- When subscribing to a channel, choose whether to load its newest video right away, the newest few, or
+  nothing until the next one comes out. Upcoming premieres and live streams wait until they are over.
+- To download in the background, Android has to let Tapedeck run unrestricted — the settings and the
+  mixtape's page ask for it. Without that, a notification says what is waiting, and it downloads as soon
+  as you open Tapedeck.
 
 ### A tape deck to look at
 
@@ -240,7 +256,8 @@ signed with the same key, so later updates install over any of them.
 - The first start unpacks Python and FFmpeg and fetches the current yt-dlp; give it a few seconds.
 - Preparing a YouTube download takes 15–40 seconds (the phone solves YouTube's JavaScript challenge);
   the download itself is fast.
-- **Samsung:** set Tapedeck's battery use to *Unrestricted* so nothing is paused in the background.
+- **Samsung:** set Tapedeck's battery use to *Unrestricted* so nothing is paused in the background — that
+  is also what lets subscriptions download by themselves.
 - **Android Auto** lists apps that do not come from Play only after turning on *Unknown sources* in
   Android Auto's developer settings.
 
@@ -251,8 +268,9 @@ signed with the same key, so later updates install over any of them.
 Tapedeck has no account, no analytics and no ads. It connects only to:
 
 - **YouTube** (or the site you shared), through yt-dlp, to download what you asked for, to list its
-  formats when you tap *Custom…*, and — for sites other than YouTube — to read title and picture for the
-  download sheet; for YouTube that comes from its oEmbed endpoint;
+  formats when you tap *Custom…*, to look at the channels and playlists you subscribed to every few hours,
+  and — for sites other than YouTube — to read title and picture for the download sheet; for YouTube that
+  comes from its oEmbed endpoint;
 - **GitHub**, to check for and download updates of yt-dlp and of Tapedeck;
 - **SponsorBlock**, only if *Skip sponsor segments* is on (yt-dlp sends a short hash prefix of the
   video id).

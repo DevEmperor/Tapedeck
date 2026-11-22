@@ -57,6 +57,8 @@ data class AppSettings(
     val cassetteView: Boolean = false,
     /** Entries on a mixtape are never removed by the clean-up (nor by "Delete everything heard"). */
     val protectMixtapes: Boolean = true,
+    /** How often subscribed channels and playlists are looked at for new videos, in hours. */
+    val subscriptionHours: Int = 3,
 ) {
     val autoDeleteAfterDays: Int get() = autoDeleteDays.coerceIn(AUTO_DELETE_MIN_DAYS, AUTO_DELETE_MAX_DAYS)
 
@@ -65,6 +67,7 @@ data class AppSettings(
         const val AUTO_DELETE_MAX_DAYS = 90
         const val MAX_PARALLEL_DOWNLOADS = 5
         val REWIND_OPTIONS_SEC = listOf(0, 3, 5, 10, 30)
+        val SUBSCRIPTION_HOURS = listOf(1, 2, 3, 4, 6, 8, 12, 24)
     }
 }
 

@@ -27,9 +27,12 @@ import net.devemperor.tapedeck.data.AppSettings
 import net.devemperor.tapedeck.data.DownloadOptions
 import net.devemperor.tapedeck.data.DownloadState
 import net.devemperor.tapedeck.data.Entry
+import net.devemperor.tapedeck.data.MediaKind
 import net.devemperor.tapedeck.data.Mixtape
 import net.devemperor.tapedeck.data.ShareAction
 import net.devemperor.tapedeck.data.Storage
+import net.devemperor.tapedeck.data.Subscription
+import net.devemperor.tapedeck.data.SubscriptionPlan
 import net.devemperor.tapedeck.download.NewDownload
 import net.devemperor.tapedeck.engine.AppInstallState
 import net.devemperor.tapedeck.engine.Engine
@@ -42,6 +45,7 @@ import net.devemperor.tapedeck.engine.MediaFormat
 import net.devemperor.tapedeck.engine.Playlist
 import net.devemperor.tapedeck.engine.PreviewInfo
 import net.devemperor.tapedeck.player.PlayerConnection
+import net.devemperor.tapedeck.work.Subscriptions
 
 data class AddSheetState(
     val url: String = "",
@@ -67,13 +71,27 @@ data class AddSheetState(
     val newMixtapeName: String? = null,
     /** Load over mobile data although "Wi-Fi only" is on (offered while on mobile data). */
     val mobileData: Boolean = false,
+    /** The link is a YouTube channel: the sheet subscribes to its videos (this tab's link) instead. */
+    val channelUrl: String? = null,
+    /** The channel's newest videos, for its name and the first ones to load. */
+    val channel: Playlist? = null,
+    val loadingChannel: Boolean = false,
+    val channelFailed: Boolean = false,
+    /** A whole playlist is subscribed to: its new videos come by themselves later. */
+    val subscribe: Boolean = false,
+    /** How many downloads the subscription keeps (0: all). */
+    val keep: Int = Subscription.DEFAULT_KEEP_CHANNEL,
+    /** How many of a channel's newest videos load right away. */
+    val loadNow: Int = 1,
 ) {
     val link: String? get() = Links.extractUrl(url)
+    val isChannel: Boolean get() = channelUrl != null
     val canStart: Boolean
-        get() = link != null && (!wholePlaylist || playlist?.items?.isNotEmpty() == true)
+        get() = link != null && (!wholePlaylist || playlist?.items?.isNotEmpty() == true) &&
+            (!isChannel || channel?.items?.isNotEmpty() == true)
 
-    /** Formats are per video, so a whole playlist always goes by the presets. */
-    val canPickFormat: Boolean get() = link != null && !wholePlaylist
+    /** Formats are per video, so a whole playlist or a channel always goes by the presets. */
+    val canPickFormat: Boolean get() = link != null && !wholePlaylist && !isChannel
 }
 
 /** A video link (YouTube, Instagram, …) found in the clipboard, offered at the top of the library. */
@@ -120,7 +138,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             message { it.getString(R.string.share_no_link) }
             return
         }
-        if (settings.value.shareAction == ShareAction.DOWNLOAD_NOW && !Links.isPlaylistOnly(url)) {
+        // A playlist or a channel always opens the sheet: there is something to choose (whole list, subscription).
+        if (settings.value.shareAction == ShareAction.DOWNLOAD_NOW && !Links.isPlaylistOnly(url) && Links.channelVideosUrl(url) == null) {
             downloadNow(url)
         } else {
             openSheet(url)
@@ -194,25 +213,35 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         previewJob?.cancel()
         playlistJob?.cancel()
         detailsJob?.cancel()
+        channelJob?.cancel()
         _sheet.value = null
     }
 
     fun onUrlChanged(text: String) {
         val url = Links.extractUrl(text)
         val playlistOnly = url != null && Links.isPlaylistOnly(url)
+        val channelUrl = url?.let(Links::channelVideosUrl)
         _sheet.update {
             it?.copy(
                 url = text, preview = null, loadingPreview = url != null, playlist = null, playlistFailed = false,
                 playlistId = url?.let(Links::playlistId), wholePlaylist = playlistOnly,
-                alreadyInLibrary = url != null && !playlistOnly && inLibrary(url),
+                alreadyInLibrary = url != null && !playlistOnly && channelUrl == null && inLibrary(url),
                 details = null, loadingDetails = false, detailsError = null, showFormats = false,
                 options = it.options.asDefaults(),
+                channelUrl = channelUrl, channel = null, loadingChannel = false, channelFailed = false,
+                subscribe = false, keep = Subscription.DEFAULT_KEEP_CHANNEL, loadNow = 1,
+                mixtapeId = null, newMixtapeName = null,
             )
         }
         previewJob?.cancel()
         playlistJob?.cancel()
         detailsJob?.cancel()
         if (url == null) return
+        // A channel has no oEmbed and no single video to read: its newest videos are the preview.
+        if (channelUrl != null) {
+            loadChannel()
+            return
+        }
         previewJob = viewModelScope.launch {
             delay(250)
             val info = app.preview.fetch(Links.clean(url))
@@ -229,8 +258,50 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun setWholePlaylist(whole: Boolean) {
-        _sheet.update { it?.copy(wholePlaylist = whole, options = if (whole) it.options.asDefaults() else it.options) }
+        _sheet.update { sheet ->
+            sheet?.copy(wholePlaylist = whole, options = if (whole) sheet.options.asDefaults() else sheet.options, subscribe = whole && sheet.subscribe)
+                ?.let { if (whole) it.withPlaylistMixtape() else it.copy(newMixtapeName = null) }
+        }
         if (whole && _sheet.value?.playlist == null) loadPlaylist()
+    }
+
+    /** A whole playlist becomes a mixtape of its own name, unless another one was chosen. */
+    private fun AddSheetState.withPlaylistMixtape(): AddSheetState {
+        val title = playlist?.title ?: return this
+        return if (wholePlaylist && mixtapeId == null && newMixtapeName == null) copy(newMixtapeName = title) else this
+    }
+
+    /** "Keep it up to date" for a whole playlist: a subscription, which by default keeps all of it. */
+    fun setSheetSubscribe(on: Boolean) = _sheet.update {
+        it?.copy(subscribe = on, keep = if (on) Subscription.DEFAULT_KEEP_PLAYLIST else it.keep)
+    }
+
+    fun setSheetKeep(keep: Int) = _sheet.update { it?.copy(keep = keep, loadNow = if (keep > 0) it.loadNow.coerceAtMost(keep) else it.loadNow) }
+
+    fun setSheetLoadNow(count: Int) = _sheet.update { it?.copy(loadNow = count) }
+
+    private var channelJob: Job? = null
+
+    private fun loadChannel() {
+        val sheet = _sheet.value ?: return
+        val channelUrl = sheet.channelUrl ?: return
+        channelJob?.cancel()
+        _sheet.update { it?.copy(loadingChannel = true, channelFailed = false, loadingPreview = true) }
+        channelJob = viewModelScope.launch {
+            val result = runCatching { Engine.fetchPlaylist(app, channelUrl, limit = SubscriptionPlan.CHANNEL_LOOK) }
+            if (result.exceptionOrNull() is kotlinx.coroutines.CancellationException) return@launch
+            result.exceptionOrNull()?.let { Log.w("TapedeckSubscribe", "reading channel $channelUrl failed", it) }
+            val channel = result.getOrNull()?.takeIf { it.items.isNotEmpty() }
+            _sheet.update {
+                if (it?.url != sheet.url) it
+                else it.copy(
+                    channel = channel, loadingChannel = false, channelFailed = channel == null, loadingPreview = false,
+                    preview = channel?.let { c ->
+                        PreviewInfo(c.channel ?: c.title ?: channelUrl, c.items.firstOrNull()?.title, c.items.firstOrNull()?.thumbnailUrl)
+                    },
+                )
+            }
+        }
     }
 
     private var detailsJob: Job? = null
@@ -295,6 +366,43 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun reorderMixtape(mixtapeId: String, entryIds: List<String>) = app.library.reorderMixtape(mixtapeId, entryIds)
 
+    // ---- Subscriptions ----
+
+    private val _checking = MutableStateFlow<Set<String>>(emptySet())
+
+    /** Subscribed mixtapes being looked at right now ("Look now"). */
+    val checking: StateFlow<Set<String>> = _checking.asStateFlow()
+
+    fun checkSubscription(mixtapeId: String) {
+        if (mixtapeId in _checking.value) return
+        _checking.update { it + mixtapeId }
+        viewModelScope.launch {
+            val found = runCatching { Subscriptions.check(app, mixtapeId) }.getOrDefault(0)
+            _checking.update { it - mixtapeId }
+            message { if (found > 0) it.resources.getQuantityString(R.plurals.subscription_found, found, found) else it.getString(R.string.subscription_nothing) }
+        }
+    }
+
+    /** A new limit makes room at once if there is more than it allows now. */
+    fun setSubscriptionKeep(mixtapeId: String, keep: Int) {
+        app.library.updateSubscription(mixtapeId) { it.copy(keep = keep) }
+        Subscriptions.rotate(app, mixtapeId)
+    }
+
+    /** Audio or video from the next download of the subscription on. */
+    fun setSubscriptionKind(mixtapeId: String, kind: MediaKind) =
+        app.library.updateSubscription(mixtapeId) { it.copy(options = it.options.copy(kind = kind)) }
+
+    /** The mixtape and its downloads stay; nothing new comes in any more. */
+    fun unsubscribe(mixtapeId: String) = app.library.updateMixtape(mixtapeId) { it.copy(subscription = null) }
+
+    fun backgroundAllowed(): Boolean = Subscriptions.unrestricted(app)
+
+    /** Android's question whether Tapedeck may run unrestricted (so subscriptions download in the background). */
+    @android.annotation.SuppressLint("BatteryLife")
+    fun backgroundPermissionIntent(): Intent =
+        Intent(android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, android.net.Uri.parse("package:${app.packageName}"))
+
     fun playMixtape(tape: Mixtape, start: Entry? = null, shuffle: Boolean = false, fromStart: Boolean = false) =
         player.playMixtape(tape, entries.value.filter { it.id !in _pendingDeletes.value }, settings.value, start, shuffle, fromStart)
 
@@ -337,6 +445,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             _sheet.update {
                 if (it?.url != sheet.url) it
                 else it.copy(playlist = result.getOrNull(), loadingPlaylist = false, playlistFailed = result.isFailure || result.getOrNull()?.items.isNullOrEmpty())
+                    .withPlaylistMixtape()
             }
         }
     }
@@ -347,6 +456,26 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         // The sheet's choice (Audio or Video included) is where the next download starts; a picked stream is not.
         app.settings.update { it.copy(defaults = sheet.options.asDefaults()) }
         val playlist = sheet.playlist
+        // Subscribing: a channel, or a whole playlist kept up to date — a mixtape that fills itself.
+        val channel = sheet.channel
+        val subscribed = when {
+            sheet.channelUrl != null && channel != null -> Subscriptions.subscribe(
+                app, sheet.channelUrl, playlist = false, title = channel.channel ?: channel.title ?: sheet.channelUrl,
+                options = sheet.options, keep = sheet.keep, items = channel.items, now = sheet.loadNow,
+            )
+            sheet.wholePlaylist && sheet.subscribe && playlist != null && sheet.playlistId != null -> Subscriptions.subscribe(
+                app, Links.playlistUrl(sheet.playlistId), playlist = true,
+                title = sheet.newMixtapeName ?: playlist.title ?: link,
+                options = sheet.options, keep = sheet.keep, items = playlist.items,
+                now = sheet.keep.takeIf { it > 0 } ?: Int.MAX_VALUE,
+            )
+            else -> null
+        }
+        if (subscribed != null) {
+            closeSheet()
+            message { it.getString(R.string.subscribed_message, subscribed.name) }
+            return
+        }
         // The switch only shows on mobile data; switched on and then back on Wi-Fi, it no longer matters.
         val mobileData = sheet.mobileData && settings.value.wifiOnly
         val requests = if (sheet.wholePlaylist && playlist != null) {

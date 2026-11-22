@@ -8,6 +8,8 @@ import coil3.network.okhttp.OkHttpNetworkFetcherFactory
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import net.devemperor.tapedeck.data.Library
 import net.devemperor.tapedeck.data.Settings
@@ -17,6 +19,7 @@ import net.devemperor.tapedeck.engine.AppUpdates
 import net.devemperor.tapedeck.engine.Engine
 import net.devemperor.tapedeck.engine.Preview
 import net.devemperor.tapedeck.work.Maintenance
+import net.devemperor.tapedeck.work.Subscriptions
 import okhttp3.OkHttpClient
 import java.io.File
 import java.util.concurrent.TimeUnit
@@ -65,6 +68,12 @@ class TapedeckApp : Application(), SingletonImageLoader.Factory {
             runCatching { Engine.ensureInitialized(this@TapedeckApp) }
         }
         scope.launch(Dispatchers.IO) { Maintenance.cleanUp(this@TapedeckApp) }
+        // The regular look at subscriptions follows their number, the interval and "Wi-Fi only".
+        scope.launch {
+            combine(settings.state, library.mixtapes) { s, tapes -> Triple(s.subscriptionHours, s.wifiOnly, tapes.any { it.subscription != null }) }
+                .distinctUntilChanged()
+                .collect { (hours, wifiOnly, any) -> Subscriptions.schedule(this@TapedeckApp, hours, wifiOnly, any) }
+        }
     }
 
     override fun newImageLoader(context: PlatformContext): ImageLoader =

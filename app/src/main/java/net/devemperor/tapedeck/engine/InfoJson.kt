@@ -53,7 +53,8 @@ data class PlaylistItem(
     val thumbnailUrl: String?,
 )
 
-data class Playlist(val title: String?, val items: List<PlaylistItem>)
+/** A playlist or a channel's videos; [channel] is the channel's own name ("Blender", not "Blender - Videos"). */
+data class Playlist(val title: String?, val items: List<PlaylistItem>, val channel: String? = null)
 
 object InfoJson {
     private val json = Json { ignoreUnknownKeys = true; isLenient = true }
@@ -104,7 +105,7 @@ object InfoJson {
                 thumbnailUrl = thumbnail ?: Links.thumbnailFor(url),
             )
         }
-        return Playlist(title = root.string("title"), items = entries)
+        return Playlist(title = root.string("title"), items = entries, channel = root.string("channel") ?: root.string("uploader"))
     }
 
     private fun JsonObject.primitive(key: String): JsonPrimitive? = (this[key] as? JsonPrimitive)?.takeIf { it !is JsonNull }
