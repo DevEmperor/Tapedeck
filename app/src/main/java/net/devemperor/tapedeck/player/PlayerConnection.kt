@@ -61,6 +61,11 @@ class PlayerConnection(private val context: Context) {
     }
 
     fun disconnect() {
+        // The app leaves the screen (Home, or the screen turned off): take the video's surface off the player
+        // first, so it plays on as sound alone. Left attached, the player kept drawing into the surface of a
+        // stopped screen; on some phones that stopped playback when the screen was turned off with Tapedeck
+        // in front, while going Home first was fine. Coming back, the player view attaches it again.
+        _controller.value?.clearVideoSurface()
         _controller.value?.removeListener(listener)
         future?.let(MediaController::releaseFuture)
         future = null
@@ -102,10 +107,18 @@ class PlayerConnection(private val context: Context) {
      * A mixtape from [start] on (or from its first song), always one after the other — that is what a
      * mixtape is for, whatever "Keep playing" says. [shuffle] plays it in random order instead.
      */
-    fun playMixtape(tape: Mixtape, library: List<Entry>, settings: AppSettings, start: Entry? = null, shuffle: Boolean = false) {
+    fun playMixtape(
+        tape: Mixtape,
+        library: List<Entry>,
+        settings: AppSettings,
+        start: Entry? = null,
+        shuffle: Boolean = false,
+        /** [start] from its very beginning ("Play from the start" in its menu), not where it stopped. */
+        fromStart: Boolean = false,
+    ) {
         val controller = _controller.value ?: return
         val current = controller.currentMediaItem
-        if (start != null && !shuffle && current?.mediaId == start.id && current.let(MediaItems::mixtapeOf) == tape.id) {
+        if (start != null && !shuffle && !fromStart && current?.mediaId == start.id && current.let(MediaItems::mixtapeOf) == tape.id) {
             if (!controller.isPlaying) controller.play()
             return
         }
@@ -113,7 +126,7 @@ class PlayerConnection(private val context: Context) {
         if (queue.isEmpty()) return
         val index = if (shuffle) queue.indices.random() else start?.let { s -> queue.indexOfFirst { it.id == s.id } }?.coerceAtLeast(0) ?: 0
         // A song picked by hand carries on where it stopped; "play the mixtape" starts each song at its beginning.
-        val position = if (start != null && !shuffle) MediaItems.resumePosition(queue[index], settings.resumeRewindSec) else 0
+        val position = if (start != null && !shuffle && !fromStart) MediaItems.resumePosition(queue[index], settings.resumeRewindSec) else 0
         controller.shuffleModeEnabled = shuffle
         controller.setMediaItems(queue.map { MediaItems.from(it, mixtapeId = tape.id) }, index, position)
         controller.prepare()

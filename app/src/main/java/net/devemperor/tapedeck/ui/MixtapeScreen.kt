@@ -15,10 +15,12 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -443,6 +445,7 @@ fun MixtapeScreen(
                     val entry = byId[id] ?: return@items
                     val isDragged = dragging == id
                     val isCurrent = state.entryId == id && state.mixtapeId == tape.id
+                    var menu by remember { mutableStateOf(false) }
                     Row(
                         Modifier.fillMaxWidth()
                             .zIndex(if (isDragged) 1f else 0f)
@@ -457,10 +460,17 @@ fun MixtapeScreen(
                                     else -> MaterialTheme.colorScheme.background
                                 },
                             )
-                            .clickable(enabled = entry.isDone) {
-                                vm.playMixtape(tape, start = entry)
-                                if (entry.isVideo) onOpenPlayerFrom(entry.id)
-                            }
+                            // A tap plays the mixtape from here; a long press opens the item's menu, as ⋮ does
+                            // (moving it goes by the handle on the left).
+                            .combinedClickable(
+                                onClick = {
+                                    if (entry.isDone) {
+                                        vm.playMixtape(tape, start = entry)
+                                        if (entry.isVideo) onOpenPlayerFrom(entry.id)
+                                    }
+                                },
+                                onLongClick = { menu = true },
+                            )
                             .padding(vertical = 6.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
@@ -521,8 +531,34 @@ fun MixtapeScreen(
                                 Text(stringResource(R.string.mixtape_not_ready), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                         }
-                        IconButton(onClick = { vm.removeFromMixtape(tape.id, id) }) {
-                            Icon(Icons.Rounded.Close, stringResource(R.string.mixtape_remove), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Box {
+                            IconButton(onClick = { menu = true }) {
+                                Icon(Icons.Rounded.MoreVert, stringResource(R.string.more), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            val takeOff: @Composable ColumnScope.() -> Unit = {
+                                MenuItem(Icons.Rounded.Close, R.string.mixtape_remove) {
+                                    menu = false
+                                    vm.removeFromMixtape(tape.id, id)
+                                }
+                            }
+                            if (entry.isDone) {
+                                // The same menu as in the library, with taking it off this mixtape first; "from the
+                                // start" plays on in the mixtape's order.
+                                EntryMenu(
+                                    entry, vm, expanded = menu, onDismiss = { menu = false },
+                                    onPlayFromStart = {
+                                        vm.playMixtape(tape, start = entry, fromStart = true)
+                                        if (entry.isVideo) onOpenPlayerFrom(entry.id)
+                                    },
+                                    top = {
+                                        takeOff()
+                                        HorizontalDivider()
+                                    },
+                                )
+                            } else {
+                                // Still downloading: nothing to play or share yet.
+                                DropdownMenu(menu, onDismissRequest = { menu = false }) { takeOff() }
+                            }
                         }
                     }
                 }

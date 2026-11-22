@@ -10,6 +10,8 @@ import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.util.EventLogger
+import net.devemperor.tapedeck.BuildConfig
 import androidx.media3.session.CommandButton
 import androidx.media3.session.LibraryResult
 import androidx.media3.session.MediaLibraryService
@@ -56,6 +58,8 @@ class PlaybackService : MediaLibraryService() {
             .setSeekForwardIncrementMs(SEEK_FORWARD_MS)
             .build()
         player.addListener(listener)
+        // Debug builds log every change of the player with its reason (who paused, why it stalled).
+        if (BuildConfig.DEBUG) player.addAnalyticsListener(EventLogger("TapedeckPlayer"))
 
         val back = CommandButton.Builder(CommandButton.ICON_SKIP_BACK_10)
             .setDisplayName(getString(R.string.action_back_10))

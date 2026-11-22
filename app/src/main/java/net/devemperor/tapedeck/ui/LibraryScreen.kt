@@ -22,6 +22,7 @@ import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
@@ -856,9 +857,7 @@ private fun EntryCard(
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
-    val uriHandler = LocalUriHandler.current
     var menu by remember { mutableStateOf(false) }
-    var picking by remember { mutableStateOf(false) }
     // The card in hand while its lifted copy is dragged: outlined in the accent colour, its content faded,
     // like the empty spot it was lifted from.
     val inHand = drag?.active == true && drag.held == entry.id
@@ -946,28 +945,49 @@ private fun EntryCard(
             }
             Box {
                 IconButton(onClick = { menu = true }) { Icon(Icons.Rounded.MoreVert, stringResource(R.string.more)) }
-                DropdownMenu(menu, onDismissRequest = { menu = false }) {
-                    MenuItem(Icons.Rounded.PlayArrow, R.string.play_from_start) { menu = false; vm.playFromStart(entry) }
-                    MenuItem(Icons.AutoMirrored.Rounded.PlaylistAdd, R.string.mixtape_add) { menu = false; picking = true }
-                    MenuItem(Icons.Rounded.DoneAll, if (entry.finished) R.string.mark_unheard else R.string.mark_heard) { menu = false; vm.toggleFinished(entry) }
-                    MenuItem(Icons.Rounded.PushPin, if (entry.keep) R.string.unkeep else R.string.keep) { menu = false; vm.toggleKeep(entry) }
-                    MenuItem(Icons.Rounded.Share, R.string.share_file) {
-                        menu = false
-                        vm.shareIntent(entry)?.let { context.startActivity(it.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
-                    }
-                    MenuItem(Icons.Rounded.SaveAlt, R.string.export) { menu = false; vm.export(entry) }
-                    MenuItem(Icons.AutoMirrored.Rounded.OpenInNew, R.string.open_source) { menu = false; runCatching { uriHandler.openUri(entry.url) } }
-                    HorizontalDivider()
-                    MenuItem(Icons.Rounded.Delete, R.string.delete, danger = true) { menu = false; vm.delete(setOf(entry.id)) }
-                }
+                EntryMenu(entry, vm, expanded = menu, onDismiss = { menu = false })
             }
         }
+    }
+}
+
+/**
+ * What can be done with a download: the menu behind ⋮ on its card in the library and on a mixtape's page.
+ * [top] puts items of the place first (on a mixtape: take it off), [onPlayFromStart] decides in which
+ * order it plays on (a mixtape plays on in its own).
+ */
+@Composable
+fun EntryMenu(
+    entry: Entry,
+    vm: MainViewModel,
+    expanded: Boolean,
+    onDismiss: () -> Unit,
+    onPlayFromStart: () -> Unit = { vm.playFromStart(entry) },
+    top: @Composable ColumnScope.() -> Unit = {},
+) {
+    val context = LocalContext.current
+    val uriHandler = LocalUriHandler.current
+    var picking by remember { mutableStateOf(false) }
+    DropdownMenu(expanded, onDismissRequest = onDismiss) {
+        top()
+        MenuItem(Icons.Rounded.PlayArrow, R.string.play_from_start) { onDismiss(); onPlayFromStart() }
+        MenuItem(Icons.AutoMirrored.Rounded.PlaylistAdd, R.string.mixtape_add) { onDismiss(); picking = true }
+        MenuItem(Icons.Rounded.DoneAll, if (entry.finished) R.string.mark_unheard else R.string.mark_heard) { onDismiss(); vm.toggleFinished(entry) }
+        MenuItem(Icons.Rounded.PushPin, if (entry.keep) R.string.unkeep else R.string.keep) { onDismiss(); vm.toggleKeep(entry) }
+        MenuItem(Icons.Rounded.Share, R.string.share_file) {
+            onDismiss()
+            vm.shareIntent(entry)?.let { context.startActivity(it.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+        }
+        MenuItem(Icons.Rounded.SaveAlt, R.string.export) { onDismiss(); vm.export(entry) }
+        MenuItem(Icons.AutoMirrored.Rounded.OpenInNew, R.string.open_source) { onDismiss(); runCatching { uriHandler.openUri(entry.url) } }
+        HorizontalDivider()
+        MenuItem(Icons.Rounded.Delete, R.string.delete, danger = true) { onDismiss(); vm.delete(setOf(entry.id)) }
     }
     if (picking) MixtapePickerDialog(vm, entry, onDismiss = { picking = false })
 }
 
 @Composable
-private fun MenuItem(icon: ImageVector, label: Int, danger: Boolean = false, onClick: () -> Unit) {
+fun MenuItem(icon: ImageVector, label: Int, danger: Boolean = false, onClick: () -> Unit) {
     val color = if (danger) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface
     DropdownMenuItem(
         text = { Text(stringResource(label), color = color) },

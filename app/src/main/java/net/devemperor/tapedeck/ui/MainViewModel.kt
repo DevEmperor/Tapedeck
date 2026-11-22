@@ -295,8 +295,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun reorderMixtape(mixtapeId: String, entryIds: List<String>) = app.library.reorderMixtape(mixtapeId, entryIds)
 
-    fun playMixtape(tape: Mixtape, start: Entry? = null, shuffle: Boolean = false) =
-        player.playMixtape(tape, entries.value.filter { it.id !in _pendingDeletes.value }, settings.value, start, shuffle)
+    fun playMixtape(tape: Mixtape, start: Entry? = null, shuffle: Boolean = false, fromStart: Boolean = false) =
+        player.playMixtape(tape, entries.value.filter { it.id !in _pendingDeletes.value }, settings.value, start, shuffle, fromStart)
 
     private fun loadDetails() {
         val sheet = _sheet.value ?: return

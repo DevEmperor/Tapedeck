@@ -165,7 +165,8 @@ stopped.
   reels turn while one of them plays.
 - **One after the other**: *Play* runs a mixtape in its order (and turns into *Pause* / *Resume* while
   it plays), *Shuffle* mixes it, and with *Repeat* it starts over. Drag an item by its handle to move it;
-  a download can be on several mixtapes.
+  a download can be on several mixtapes. An item's menu (⋮, or press and hold it) offers everything the
+  library does — play from the start, share, keep, delete … — and takes it off the mixtape.
 - **Drag onto a mixtape**: press and hold a card in the library — a small copy of it lifts off and
   hangs right under your finger, while the card stays marked — and the shelf comes into view, every
   cassette waiting with a dashed ring; drop it right on one (it grows and its reels turn when you are
