@@ -2,6 +2,7 @@ package net.devemperor.tapedeck.player
 
 import android.app.PendingIntent
 import android.content.Intent
+import android.net.Uri
 import androidx.annotation.OptIn
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
@@ -33,6 +34,7 @@ import net.devemperor.tapedeck.MainActivity
 import net.devemperor.tapedeck.R
 import net.devemperor.tapedeck.TapedeckApp
 import net.devemperor.tapedeck.data.Entry
+import java.io.File
 import kotlin.math.abs
 
 /**
@@ -91,9 +93,62 @@ class PlaybackService : MediaLibraryService() {
                 }
         }
         scope.launch {
+            app.settings.state.map { Triple(it.showSubtitles, it.subtitlePick, it.subtitleLangs) }.distinctUntilChanged()
+                .collect { applySubtitles() }
+        }
+        scope.launch {
+            app.library.entries.map { entries -> entries.associate { it.id to (it.mediaFile to it.thumbnailFile) } }
+                .distinctUntilChanged()
+                .collect { followMovedFiles(it) }
+        }
+        scope.launch {
             while (isActive) {
                 delay(SAVE_INTERVAL_MS)
                 if (player.isPlaying) saveCurrent()
+            }
+        }
+    }
+
+    /**
+     * Subtitles of the video playing: shown or not as the CC button says, in the language picked there,
+     * else in one of the languages chosen for downloads, else in the one the video has.
+     */
+    private fun applySubtitles() {
+        val settings = app.settings.current
+        val inVideo = player.currentTracks.groups.filter { it.type == C.TRACK_TYPE_TEXT }
+            .flatMap { group -> (0 until group.length).mapNotNull { group.getTrackFormat(it).language } }
+        val wanted = (listOfNotNull(settings.subtitlePick) + settings.subtitleLangs + inVideo).distinct()
+        val params = player.trackSelectionParameters.buildUpon()
+            .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, !settings.showSubtitles)
+            .setPreferredTextLanguages(*wanted.toTypedArray())
+            .setSelectUndeterminedTextLanguage(true)
+            .build()
+        // Setting equal parameters again would only make the player choose its tracks anew.
+        if (params != player.trackSelectionParameters) player.trackSelectionParameters = params
+    }
+
+    /**
+     * Downloads moved to another place (Settings → Download location) get their new paths in the queue, so
+     * the next ones still play. The one playing goes on where it was: a moved file stays readable through
+     * what the player has open, and the new path takes over at once (a short stall at most).
+     */
+    private fun followMovedFiles(files: Map<String, Pair<String?, String?>>) {
+        for (index in 0 until player.mediaItemCount) {
+            val item = player.getMediaItemAt(index)
+            val (media, thumbnail) = files[MediaItems.entryId(item.mediaId)] ?: continue
+            val uri = media?.let { Uri.fromFile(File(it)) } ?: continue
+            if (item.localConfiguration?.uri == uri) continue
+            val artwork = thumbnail?.let { Uri.fromFile(File(it)) } ?: item.mediaMetadata.artworkUri
+            val moved = item.buildUpon()
+                .setUri(uri)
+                .setMediaMetadata(item.mediaMetadata.buildUpon().setArtworkUri(artwork).build())
+                .build()
+            if (index == player.currentMediaItemIndex) {
+                val position = player.currentPosition
+                player.replaceMediaItem(index, moved)
+                player.seekTo(index, position)
+            } else {
+                player.replaceMediaItem(index, moved)
             }
         }
     }
@@ -149,6 +204,9 @@ class PlaybackService : MediaLibraryService() {
         override fun onIsPlayingChanged(isPlaying: Boolean) {
             if (!isPlaying) saveCurrent()
         }
+
+        // A new video brings its own subtitle languages.
+        override fun onTracksChanged(tracks: androidx.media3.common.Tracks) = applySubtitles()
 
         override fun onPlaybackStateChanged(playbackState: Int) {
             val id = player.currentMediaItem?.mediaId ?: return

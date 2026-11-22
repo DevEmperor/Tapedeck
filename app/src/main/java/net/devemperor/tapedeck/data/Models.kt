@@ -33,9 +33,15 @@ data class DownloadOptions(
     val customFormat: String? = null,
     /** How the hand-picked format reads in the sheet, e.g. "1080p60 · VP9 + Opus". */
     val customLabel: String? = null,
+    /** Subtitle languages for this video ("de", "en" …); null: as in the settings, empty: none. */
+    val subtitles: List<String>? = null,
 ) {
-    /** What is kept as the next download's defaults: everything but a hand-picked format. */
-    fun asDefaults() = copy(customFormat = null, customLabel = null)
+    /** What is kept as the next download's defaults: everything but a hand-picked format and subtitles. */
+    fun asDefaults() = copy(customFormat = null, customLabel = null, subtitles = null)
+
+    /** The subtitle languages that go into this download (video only): its own choice, else the settings'. */
+    fun subtitleLanguages(settings: AppSettings): List<String> =
+        if (kind != MediaKind.VIDEO) emptyList() else subtitles ?: settings.subtitleLangs
 }
 
 @Serializable
@@ -83,6 +89,8 @@ data class Entry(
     val mobileData: Boolean = false,
     /** The subscribed mixtape this was downloaded for, by itself: it counts towards that subscription's limit. */
     val subscription: String? = null,
+    /** The folder the download works in (app folder or SD card); older entries have none and use the app folder. */
+    val folder: String? = null,
 ) {
     val isDone get() = state == DownloadState.DONE && mediaFile != null
     val isActive get() = state == DownloadState.QUEUED || state == DownloadState.WAITING_NETWORK || state == DownloadState.RUNNING

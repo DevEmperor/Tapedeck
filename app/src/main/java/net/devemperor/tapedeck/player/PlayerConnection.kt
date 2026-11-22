@@ -29,6 +29,9 @@ data class PlayerUiState(
     val mixtapeId: String? = null,
     val shuffle: Boolean = false,
     @Player.RepeatMode val repeatMode: Int = Player.REPEAT_MODE_OFF,
+    /** The subtitle languages the video playing has ("de", "en" …), and the one shown now. */
+    val textLanguages: List<String> = emptyList(),
+    val textLanguage: String? = null,
 )
 
 /** The app's connection to [PlaybackService]; lives while the activity is started. */
@@ -178,6 +181,7 @@ class PlayerConnection(private val context: Context) {
 
     private fun refresh() {
         val controller = _controller.value ?: return
+        val texts = controller.currentTracks.groups.filter { it.type == C.TRACK_TYPE_TEXT }
         _state.value = PlayerUiState(
             entryId = controller.currentMediaItem?.mediaId,
             isPlaying = controller.isPlaying,
@@ -191,6 +195,10 @@ class PlayerConnection(private val context: Context) {
             mixtapeId = controller.currentMediaItem?.let(MediaItems::mixtapeOf),
             shuffle = controller.shuffleModeEnabled,
             repeatMode = controller.repeatMode,
+            textLanguages = texts.flatMap { group -> (0 until group.length).mapNotNull { group.getTrackFormat(it).language } }.distinct(),
+            textLanguage = texts.firstNotNullOfOrNull { group ->
+                (0 until group.length).firstOrNull { group.isTrackSelected(it) }?.let { group.getTrackFormat(it).language }
+            },
         )
     }
 }

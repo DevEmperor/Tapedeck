@@ -39,6 +39,7 @@ import net.devemperor.tapedeck.data.DownloadState
 import net.devemperor.tapedeck.data.Entry
 import net.devemperor.tapedeck.data.MediaKind
 import net.devemperor.tapedeck.data.Storage
+import net.devemperor.tapedeck.data.StorageLocation
 import net.devemperor.tapedeck.engine.DownloadError
 import net.devemperor.tapedeck.engine.Engine
 import net.devemperor.tapedeck.engine.ErrorKind
@@ -180,7 +181,7 @@ class DownloadService : LifecycleService() {
             // The bundled yt-dlp is a year old by now; fetch a current one before the very first download
             // (if opening the app could not, e.g. offline) — but only while the app is on screen.
             if (Engine.neverUpdated(app) && AppVisibility.foreground) Engine.update(app, app.settings)
-            if (Storage.freeBytes(app) < MIN_FREE_BYTES) throw StorageFullException()
+            if (Storage.freeBytes(Storage.entryDir(app, entry)) < MIN_FREE_BYTES) throw StorageFullException()
             Engine.download(app, entry, app.settings) { line ->
                 if (BuildConfig.DEBUG) Log.d(TAG, "${id.take(8)} $line")
                 if (tracker.onLine(line)) app.downloads.publish(id, tracker.current)
@@ -221,7 +222,7 @@ class DownloadService : LifecycleService() {
 
     private suspend fun finish(id: String) = withContext(Dispatchers.IO) {
         val entry = app.library[id] ?: return@withContext
-        val dir = Storage.entryDir(app, id)
+        val dir = Storage.entryDir(app, entry)
         val files = dir.listFiles().orEmpty().filter { it.isFile }
         val media = files.filter { isFinalMedia(it) }.maxByOrNull { it.length() }
             ?: throw IllegalStateException("yt-dlp finished without a media file")
@@ -230,19 +231,28 @@ class DownloadService : LifecycleService() {
         val info = readInfo(id)
         // Intermediate formats, the info JSON and anything else yt-dlp left behind.
         files.filter { it != media && it != cover }.forEach { it.delete() }
+        val size = media.length()
+        // Before the file moves: the bit rate comes from its size.
+        val label = formatLabel(entry, media, info)
+        // "Download folder": the file goes to Download/Tapedeck under its title, the cover stays with the app.
+        val placed = if (app.settings.current.storage == StorageLocation.DOWNLOADS && Storage.downloadsAvailable) {
+            Storage.publish(media, info?.title ?: entry.title) ?: media
+        } else {
+            media
+        }
         val sponsorBlock = app.settings.current.sponsorBlock
         app.library.update(id) {
             it.copy(
                 state = DownloadState.DONE,
-                mediaFile = media.absolutePath,
+                mediaFile = placed.absolutePath,
                 thumbnailFile = cover?.absolutePath,
-                sizeBytes = media.length(),
+                sizeBytes = size,
                 title = info?.title ?: it.title,
                 uploader = info?.uploader ?: it.uploader,
                 durationMs = info?.durationMs?.takeIf { ms -> ms > 0 } ?: it.durationMs,
                 // Cut sponsor segments shift every chapter, so only uncut downloads keep them.
                 chapters = if (sponsorBlock) emptyList() else info?.chapters.orEmpty(),
-                formatLabel = formatLabel(entry, media, info),
+                formatLabel = label,
                 videoWidth = if (entry.isVideo) info?.width else null,
                 videoHeight = if (entry.isVideo) info?.height else null,
                 completedAt = System.currentTimeMillis(),
@@ -251,7 +261,10 @@ class DownloadService : LifecycleService() {
             )
         }
         app.library.saveNow()
-        app.library[id]?.let(::notifyDone)
+        app.library[id]?.let { done ->
+            app.history.record(done)
+            notifyDone(done)
+        }
         // A new video of a subscription is here: now the oldest beyond its limit make room (not before, so a
         // failed download never costs an old one).
         entry.subscription?.let { Subscriptions.rotate(app, it) }
@@ -272,6 +285,12 @@ class DownloadService : LifecycleService() {
         }
         val net = app.network.state.value
         when {
+            // YouTube now and then refuses subtitles (too many requests): the video comes without them
+            // rather than not at all.
+            e is YoutubeDLException && e.message?.contains("subtitle", ignoreCase = true) == true &&
+                entry.options.subtitleLanguages(settings).isNotEmpty() -> app.library.update(id) {
+                it.copy(state = DownloadState.QUEUED, options = it.options.copy(subtitles = emptyList()))
+            }
             // The connection dropped: wait for it and continue from the partial file.
             error.kind == ErrorKind.NETWORK && !net.allows(entry, settings.wifiOnly) ->
                 app.library.update(id) { it.copy(state = DownloadState.WAITING_NETWORK) }
@@ -292,7 +311,8 @@ class DownloadService : LifecycleService() {
     }
 
     private fun readInfo(id: String): MediaInfo? {
-        val file = File(Storage.entryDir(app, id), YtDlpArgs.INFO_BASENAME + ".info.json")
+        val entry = app.library[id] ?: return null
+        val file = File(Storage.entryDir(app, entry), YtDlpArgs.INFO_BASENAME + ".info.json")
         if (!file.exists()) return null
         return runCatching { InfoJson.parse(file.readText()) }.getOrNull()
     }

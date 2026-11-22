@@ -117,6 +117,8 @@ fun AddSheet(
     onSubscribe: (Boolean) -> Unit,
     onKeep: (Int) -> Unit,
     onLoadNow: (Int) -> Unit,
+    subtitleDefaults: List<String>,
+    onSubtitles: (List<String>?) -> Unit,
     onConfirm: () -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -137,7 +139,7 @@ fun AddSheet(
             } else {
                 OptionsPage(
                     state, onUrl, onOptions, onWholePlaylist, onOpenFormats, onClearCustom, mixtapes, onMixtape,
-                    offerMobileData, onMobileData, onSubscribe, onKeep, onLoadNow, onConfirm,
+                    offerMobileData, onMobileData, onSubscribe, onKeep, onLoadNow, subtitleDefaults, onSubtitles, onConfirm,
                 )
             }
         }
@@ -159,6 +161,8 @@ private fun OptionsPage(
     onSubscribe: (Boolean) -> Unit,
     onKeep: (Int) -> Unit,
     onLoadNow: (Int) -> Unit,
+    subtitleDefaults: List<String>,
+    onSubtitles: (List<String>?) -> Unit,
     onConfirm: () -> Unit,
 ) {
     run {
@@ -300,6 +304,7 @@ private fun OptionsPage(
                         } else {
                             Hint(videoHint(options.videoFormat))
                         }
+                        SubtitleChoice(options.subtitles, subtitleDefaults, onSubtitles)
                     }
                 }
             }
@@ -428,6 +433,54 @@ private fun PlaylistRow(state: AddSheetState, onWholePlaylist: (Boolean) -> Unit
             }
             Switch(checked = state.wholePlaylist, onCheckedChange = onWholePlaylist)
         }
+    }
+}
+
+/**
+ * "Subtitles: [Deutsch, English ▾]" for a video: as in the settings, none, or languages of its own. They go
+ * into the video file; the player's CC button shows them.
+ */
+@Composable
+private fun SubtitleChoice(chosen: List<String>?, defaults: List<String>, onChange: (List<String>?) -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    var picking by remember { mutableStateOf(false) }
+    val label = when {
+        chosen == null -> subtitleLabel(defaults)
+        chosen.isEmpty() -> stringResource(R.string.subtitles_none)
+        else -> subtitleLabel(chosen)
+    }
+    Row(Modifier.fillMaxWidth().padding(top = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(stringResource(R.string.subtitles), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
+        Box {
+            Surface(
+                onClick = { open = true },
+                shape = CircleShape,
+                color = if ((chosen ?: defaults).isNotEmpty()) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerHigh,
+            ) {
+                Row(Modifier.padding(start = 14.dp, end = 8.dp, top = 8.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text(label, style = MaterialTheme.typography.labelLarge, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 200.dp))
+                    Icon(Icons.Rounded.ArrowDropDown, null)
+                }
+            }
+            DropdownMenu(open, onDismissRequest = { open = false }) {
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.subtitles_as_settings, subtitleLabel(defaults))) },
+                    onClick = { open = false; onChange(null) },
+                )
+                // With nothing in the settings, "as in the settings" already means none.
+                if (defaults.isNotEmpty()) {
+                    DropdownMenuItem(text = { Text(stringResource(R.string.subtitles_none)) }, onClick = { open = false; onChange(emptyList()) })
+                }
+                DropdownMenuItem(text = { Text(stringResource(R.string.subtitles_choose)) }, onClick = { open = false; picking = true })
+            }
+        }
+    }
+    if (picking) {
+        SubtitleLanguagesDialog(
+            selected = chosen ?: defaults,
+            onConfirm = { onChange(it); picking = false },
+            onDismiss = { picking = false },
+        )
     }
 }
 

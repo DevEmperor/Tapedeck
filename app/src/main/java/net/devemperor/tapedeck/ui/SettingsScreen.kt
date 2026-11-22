@@ -61,7 +61,9 @@ import net.devemperor.tapedeck.data.AppSettings
 import net.devemperor.tapedeck.data.AudioFormat
 import net.devemperor.tapedeck.data.AudioQuality
 import net.devemperor.tapedeck.data.ShareAction
+import net.devemperor.tapedeck.data.Entry
 import net.devemperor.tapedeck.data.Storage
+import net.devemperor.tapedeck.data.StorageLocation
 import net.devemperor.tapedeck.data.UpdateChannel
 import net.devemperor.tapedeck.data.VideoFormat
 
@@ -166,8 +168,26 @@ fun SettingsScreen(vm: MainViewModel, onBack: () -> Unit) {
                     ChoiceRowText(
                         R.string.option_resolution, "${defaults.videoHeight}p",
                         VIDEO_HEIGHTS.map { it to "${it}p" }, defaults.videoHeight,
-                        sub = stringResource(R.string.resolution_hint), last = true,
+                        sub = stringResource(R.string.resolution_hint),
                     ) { value -> vm.updateSettings { it.copy(defaults = it.defaults.copy(videoHeight = value)) } }
+                    // Subtitles: languages put into every downloaded video (the sheet can choose others per video).
+                    var pickingSubtitles by remember { mutableStateOf(false) }
+                    RowBase(onClick = { pickingSubtitles = true }, last = false) {
+                        TitleAndSub(stringResource(R.string.subtitles), stringResource(R.string.setting_subtitles_sub), modifier = Modifier.weight(1f))
+                        Spacer(Modifier.width(12.dp))
+                        ValueChip(subtitleLabel(settings.subtitleLangs)) { pickingSubtitles = true }
+                    }
+                    if (pickingSubtitles) {
+                        SubtitleLanguagesDialog(
+                            selected = settings.subtitleLangs,
+                            onConfirm = { langs -> vm.updateSettings { it.copy(subtitleLangs = langs) }; pickingSubtitles = false },
+                            onDismiss = { pickingSubtitles = false },
+                        )
+                    }
+                    SwitchRow(
+                        R.string.setting_auto_subtitles, R.string.setting_auto_subtitles_sub, settings.autoSubtitles,
+                        enabled = settings.subtitleLangs.isNotEmpty(), last = true,
+                    ) { on -> vm.updateSettings { it.copy(autoSubtitles = on) } }
                 }
                 Group(R.string.group_playback) {
                     SwitchRow(R.string.setting_autoplay, R.string.setting_autoplay_sub, settings.autoPlayNext) { on -> vm.updateSettings { it.copy(autoPlayNext = on) } }
@@ -187,8 +207,12 @@ fun SettingsScreen(vm: MainViewModel, onBack: () -> Unit) {
                     val count = entries.count { it.isDone }
                     InfoRow(
                         stringResource(R.string.storage_used),
-                        stringResource(R.string.storage_used_value, Format.bytes(context, used), pluralStringResource(R.plurals.entries, count, count), Format.bytes(context, Storage.freeBytes(context))),
+                        stringResource(
+                            R.string.storage_used_value, Format.bytes(context, used), pluralStringResource(R.plurals.entries, count, count),
+                            Format.bytes(context, Storage.freeBytes(Storage.workRoot(context, settings.storage))),
+                        ),
                     )
+                    StorageRow(vm, settings.storage)
                     SwitchRow(R.string.setting_auto_delete, R.string.setting_auto_delete_sub, settings.autoDeleteEnabled) { on ->
                         vm.updateSettings { it.copy(autoDeleteEnabled = on) }
                     }
@@ -247,6 +271,96 @@ fun SettingsScreen(vm: MainViewModel, onBack: () -> Unit) {
         VerticalScrollbar(scroll)
         }
     }
+}
+
+/**
+ * Where downloads go: the app folder, Download/Tapedeck (file managers; Android 11+) or the SD card (when
+ * one is in). After a change it offers to move the downloads that are already there, and shows how far
+ * that has got.
+ */
+@Composable
+private fun StorageRow(vm: MainViewModel, current: StorageLocation) {
+    val context = LocalContext.current
+    val moving by vm.moving.collectAsStateWithLifecycle()
+    var picking by remember { mutableStateOf(false) }
+    var offerMove by remember { mutableStateOf<Pair<StorageLocation, List<Entry>>?>(null) }
+    val sdCard = remember { Storage.sdCardRoot(context) != null }
+    val sub = moving?.let { (done, total) -> stringResource(R.string.storage_moving, done, total) }
+        ?: stringResource(storageHint(current))
+    RowBase(onClick = { picking = true }, last = false, enabled = moving == null) {
+        TitleAndSub(stringResource(R.string.setting_storage), sub, moving == null, Modifier.weight(1f))
+        Spacer(Modifier.width(12.dp))
+        ValueChip(stringResource(storageLabel(current)), moving == null) { picking = true }
+    }
+    if (picking) {
+        AlertDialog(
+            onDismissRequest = { picking = false },
+            title = { Text(stringResource(R.string.setting_storage)) },
+            text = {
+                Column {
+                    StorageLocation.entries.forEach { option ->
+                        val available = when (option) {
+                            StorageLocation.APP -> true
+                            StorageLocation.DOWNLOADS -> Storage.downloadsAvailable
+                            StorageLocation.SD_CARD -> sdCard
+                        }
+                        Row(
+                            Modifier.fillMaxWidth().clip(MaterialTheme.shapes.medium)
+                                .selectable(selected = option == current, enabled = available, role = Role.RadioButton) {
+                                    picking = false
+                                    if (option != current) {
+                                        vm.updateSettings { it.copy(storage = option) }
+                                        val there = vm.downloadsElsewhere(option)
+                                        if (there.isNotEmpty()) offerMove = option to there
+                                    }
+                                }
+                                .padding(vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            RadioButton(selected = option == current, onClick = null, enabled = available)
+                            Spacer(Modifier.width(12.dp))
+                            Column {
+                                Text(stringResource(storageLabel(option)), style = MaterialTheme.typography.titleSmall, color = if (available) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f))
+                                Text(
+                                    stringResource(
+                                        when {
+                                            option == StorageLocation.DOWNLOADS && !available -> R.string.storage_downloads_old
+                                            option == StorageLocation.SD_CARD && !available -> R.string.storage_sd_none
+                                            else -> storageHint(option)
+                                        },
+                                    ),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = { TextButton(onClick = { picking = false }) { Text(stringResource(R.string.cancel)) } },
+        )
+    }
+    offerMove?.let { (target, there) ->
+        AlertDialog(
+            onDismissRequest = { offerMove = null },
+            title = { Text(pluralStringResource(R.plurals.storage_move_title, there.size, there.size)) },
+            text = { Text(stringResource(R.string.storage_move_body, Format.bytes(context, there.sumOf { it.sizeBytes }), stringResource(storageLabel(target)))) },
+            confirmButton = { TextButton(onClick = { offerMove = null; vm.relocate(target) }) { Text(stringResource(R.string.storage_move)) } },
+            dismissButton = { TextButton(onClick = { offerMove = null }) { Text(stringResource(R.string.storage_move_not)) } },
+        )
+    }
+}
+
+private fun storageLabel(location: StorageLocation) = when (location) {
+    StorageLocation.APP -> R.string.storage_app
+    StorageLocation.DOWNLOADS -> R.string.storage_downloads
+    StorageLocation.SD_CARD -> R.string.storage_sd
+}
+
+private fun storageHint(location: StorageLocation) = when (location) {
+    StorageLocation.APP -> R.string.storage_app_sub
+    StorageLocation.DOWNLOADS -> R.string.storage_downloads_sub
+    StorageLocation.SD_CARD -> R.string.storage_sd_sub
 }
 
 @Composable

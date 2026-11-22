@@ -104,6 +104,11 @@ stopped.
   *High* quality, or *Data saver* at about 64 kbit/s — plenty for talks and podcasts.
 - **Video** in 360p to 1080p as **MP4** (H.264 + AAC, which every phone plays smoothly), **WebM**
   (VP9 + Opus, smaller) or **MKV** (the best picture in any codec, often AV1).
+- **Subtitles** go into the video file itself, so they come along when you share it. Choose your
+  languages once in the settings (regional variants like en-GB included, and — if you like — YouTube's
+  generated captions where a video has no real ones), or other ones for a single video in the download
+  sheet. *CC* in the player switches them on and off, or picks the language when there are several; they
+  keep clear of the buttons and the seek bar. A subtitle YouTube refuses never costs the video.
 - **Or pick the exact stream**, like `yt-dlp -F`: *Custom…* lists every format as a card with resolution,
   frame rate, HDR, codecs, size and bitrate — picture with sound, picture only, sound only. A picture-only
   stream gets the best sound to go with it, which you can change; the sheet shows the total size.
@@ -218,6 +223,13 @@ stopped.
   height of every row it has seen, instead of guessing) to jump through long lists.
 - **Where is it from?** The logo of YouTube, Instagram, TikTok, X, Facebook, Reddit, SoundCloud, Vimeo,
   Twitch, Dailymotion, Bandcamp, Bilibili and a few more sits next to the channel name.
+- **History**: everything you ever downloaded, by day — also what you deleted since, marked as such,
+  with its link right there. Search titles, channels and links, show only what is still in the library or
+  only what is gone, and **download it again** in a tap (or copy the link, or open the original).
+- **Where downloads go**: Tapedeck's own folder (the default), the **Download folder** — `Download/Tapedeck`,
+  named after the title, so every file manager finds them and they stay without the app (Android 11 and
+  later) — or the **SD card**. Switching offers to move the downloads you have along; even the one
+  playing keeps playing.
 - Delete with undo, **keep** a download to protect it, or delete everything heard.
 - **Automatic clean-up** after 1–90 days, counted from the download or from when you heard it to the end.
 - **Save to Downloads** to copy a file to a USB stick, or share it — both named after the video's
@@ -279,7 +291,9 @@ Tapedeck looks at the clipboard only when you open it (Android shows a short not
 keeps nothing of it but the time the last item was copied, so the same clip is not read twice. You can
 switch this off in the settings.
 
-Downloads stay in the app's own folder on your phone until you or the clean-up delete them.
+Downloads stay on your phone — in the app's own folder, the Download folder or on the SD card, as you
+chose — until you or the clean-up delete them. The history (titles, channels and links of what you
+downloaded) stays on the phone too, and *Clear history* empties it.
 
 <br>
 

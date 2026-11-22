@@ -15,7 +15,13 @@ object YtDlpArgs {
     const val COVER_BASENAME = "cover"
     const val INFO_BASENAME = "info"
 
-    fun download(options: DownloadOptions, outDir: String, sponsorBlock: Boolean): List<String> = buildList {
+    fun download(
+        options: DownloadOptions,
+        outDir: String,
+        sponsorBlock: Boolean,
+        subtitles: List<String> = emptyList(),
+        autoSubtitles: Boolean = false,
+    ): List<String> = buildList {
         add("--no-playlist")
         add("--no-mtime")
         add("--newline")
@@ -35,9 +41,33 @@ object YtDlpArgs {
             MediaKind.AUDIO -> addAll(if (custom != null) customAudio(custom) else audio(options.audioFormat, options.audioQuality))
             MediaKind.VIDEO -> addAll(if (custom != null) customVideo(custom, options.videoFormat) else video(options.videoHeight, options.videoFormat))
         }
+        if (options.kind == MediaKind.VIDEO && subtitles.isNotEmpty()) addAll(subtitleArgs(subtitles, autoSubtitles))
         if (sponsorBlock) {
             add("--sponsorblock-remove"); add("sponsor,selfpromo,interaction")
         }
+    }
+
+    /**
+     * Subtitles in the video file itself (MP4: mov_text, MKV/WebM: as they come), so the player and any other
+     * app find them, and sharing takes them along. [automatic] adds YouTube's generated captions where there
+     * are no real ones.
+     *
+     * A language also takes its regional and script variants (de-DE, es-419, zh-Hans). YouTube's machine
+     * translations of real subtitles (named target-source: en-de = English from German) are not even asked
+     * for (skip=translated_subs): "en.*" took them along, and YouTube answered one with 429 Too Many Requests,
+     * which cost the whole download (22.11.2026, "Me at the zoo"). yt-dlp matches the patterns ignoring case,
+     * so a pattern cannot tell en-GB from en-gb. "-orig" is the generated original a second time.
+     *
+     * --ignore-errors turns a subtitle that fails anyway into a warning: the video and the other subtitles
+     * still come. Real failures still end yt-dlp with exit code 1 (trouble() sets it either way).
+     */
+    fun subtitleArgs(languages: List<String>, automatic: Boolean): List<String> = buildList {
+        add("--write-subs")
+        if (automatic) add("--write-auto-subs")
+        add("--sub-langs"); add((languages.map { "$it(-.+)?" } + "-.+-orig" + "-live_chat").joinToString(","))
+        add("--extractor-args"); add("youtube:skip=translated_subs")
+        add("--embed-subs")
+        add("--ignore-errors")
     }
 
     fun audio(format: AudioFormat, quality: AudioQuality): List<String> = buildList {
@@ -96,8 +126,10 @@ object YtDlpArgs {
         VideoFormat.MKV -> "mkv"
     }
 
-    /** Lists a playlist's videos without resolving any of them (fast, no JavaScript challenge). */
-    /** The items of a playlist or channel without opening each video; [limit] only the first so many (a channel's newest). */
+    /**
+     * The items of a playlist or channel without opening each video (fast, no JavaScript challenge); [limit]
+     * only the first so many (a channel's newest).
+     */
     fun playlist(limit: Int? = null): List<String> =
         listOf("--flat-playlist", "--yes-playlist", "-J") + (limit?.let { listOf("--playlist-end", it.toString()) } ?: emptyList())
 

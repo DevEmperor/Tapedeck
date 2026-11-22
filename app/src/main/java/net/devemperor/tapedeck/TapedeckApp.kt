@@ -11,6 +11,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
+import net.devemperor.tapedeck.data.History
 import net.devemperor.tapedeck.data.Library
 import net.devemperor.tapedeck.data.Settings
 import net.devemperor.tapedeck.download.Downloads
@@ -39,6 +40,8 @@ class TapedeckApp : Application(), SingletonImageLoader.Factory {
         private set
     lateinit var downloads: Downloads
         private set
+    lateinit var history: History
+        private set
     lateinit var network: NetworkMonitor
         private set
     lateinit var preview: Preview
@@ -57,6 +60,7 @@ class TapedeckApp : Application(), SingletonImageLoader.Factory {
         super.onCreate()
         settings = Settings(this)
         library = Library(File(filesDir, "library.json"), scope)
+        history = History(File(filesDir, "history.json"), scope) { library.entries.value }
         downloads = Downloads(this, scope)
         network = NetworkMonitor(this)
         preview = Preview(http)

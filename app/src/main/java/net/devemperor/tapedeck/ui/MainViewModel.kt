@@ -27,10 +27,12 @@ import net.devemperor.tapedeck.data.AppSettings
 import net.devemperor.tapedeck.data.DownloadOptions
 import net.devemperor.tapedeck.data.DownloadState
 import net.devemperor.tapedeck.data.Entry
+import net.devemperor.tapedeck.data.HistoryItem
 import net.devemperor.tapedeck.data.MediaKind
 import net.devemperor.tapedeck.data.Mixtape
 import net.devemperor.tapedeck.data.ShareAction
 import net.devemperor.tapedeck.data.Storage
+import net.devemperor.tapedeck.data.StorageLocation
 import net.devemperor.tapedeck.data.Subscription
 import net.devemperor.tapedeck.data.SubscriptionPlan
 import net.devemperor.tapedeck.download.NewDownload
@@ -280,6 +282,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun setSheetLoadNow(count: Int) = _sheet.update { it?.copy(loadNow = count) }
 
+    /** Subtitles of this one video: null as in the settings, empty none. */
+    fun setSheetSubtitles(languages: List<String>?) = _sheet.update { it?.copy(options = it.options.copy(subtitles = languages)) }
+
     private var channelJob: Job? = null
 
     private fun loadChannel() {
@@ -365,6 +370,31 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun reorderMixtape(mixtapeId: String, entryIds: List<String>) = app.library.reorderMixtape(mixtapeId, entryIds)
+
+    // ---- Where downloads go ----
+
+    val moving = app.downloads.moving
+
+    fun downloadsElsewhere(location: StorageLocation): List<Entry> = app.downloads.elsewhere(location)
+
+    fun relocate(location: StorageLocation) = app.downloads.relocate(location)
+
+    // ---- History ----
+
+    val history: StateFlow<List<HistoryItem>> = app.history.items
+
+    /** A video from the history once more: the download sheet with its link, as audio or video like last time. */
+    fun redownload(item: HistoryItem) {
+        openSheet(item.url)
+        _sheet.update { it?.copy(options = it.options.copy(kind = item.kind)) }
+    }
+
+    fun removeFromHistory(key: String) = app.history.remove(key)
+
+    fun clearHistory() = app.history.clear()
+
+    /** A short word at the bottom of the screen. */
+    fun say(text: Int) = message { it.getString(text) }
 
     // ---- Subscriptions ----
 

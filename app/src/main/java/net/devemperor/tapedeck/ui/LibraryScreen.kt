@@ -60,6 +60,7 @@ import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.DoneAll
 import androidx.compose.material.icons.rounded.ErrorOutline
+import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.NewReleases
 import androidx.compose.material.icons.rounded.Pause
@@ -158,6 +159,7 @@ fun LibraryScreen(
     onOpenPlayerFrom: (String) -> Unit,
     onOpenFullscreen: () -> Unit,
     onOpenSettings: () -> Unit,
+    onOpenHistory: () -> Unit,
     onOpenMixtape: (String) -> Unit,
 ) {
     val entries by vm.entries.collectAsStateWithLifecycle()
@@ -300,6 +302,7 @@ fun LibraryScreen(
                     onSearch = { searching = true },
                     onCloseSearch = { searching = false; query = "" },
                     onSettings = onOpenSettings,
+                    onHistory = onOpenHistory,
                 )
             }
             item(key = "engine") { EngineBanner(engine) }
@@ -404,6 +407,7 @@ private fun TopBar(
     onSearch: () -> Unit,
     onCloseSearch: () -> Unit,
     onSettings: () -> Unit,
+    onHistory: () -> Unit,
 ) {
     Row(
         Modifier.fillMaxWidth().statusBarsPadding().padding(start = 20.dp, end = 8.dp, top = 8.dp, bottom = 4.dp).height(56.dp),
@@ -433,6 +437,7 @@ private fun TopBar(
             Spacer(Modifier.width(10.dp))
             Text(stringResource(R.string.app_name), style = MaterialTheme.typography.headlineMedium, modifier = Modifier.weight(1f))
             IconButton(onClick = onSearch) { Icon(Icons.Rounded.Search, stringResource(R.string.search)) }
+            IconButton(onClick = onHistory) { Icon(Icons.Rounded.History, stringResource(R.string.history)) }
             IconButton(onClick = onSettings) { Icon(Icons.Rounded.Settings, stringResource(R.string.settings)) }
         }
     }

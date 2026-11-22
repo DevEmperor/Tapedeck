@@ -13,26 +13,116 @@ import androidx.core.content.FileProvider
 import java.io.File
 
 /**
- * Downloads live in the app's own folder on the shared storage (Android/data/…/files/media/<entry>), so
- * they need no storage permission and can still be copied off over USB.
+ * Where downloads live ([StorageLocation]). Each one works in a folder of its own with fixed file names —
+ * in the app's folder on the phone (Android/data/…/files/media/<entry>, no permission needed, visible over
+ * USB) or the app's folder on an SD card. With "Download folder" the finished file then moves to
+ * Download/Tapedeck under its title, where every file manager shows it.
  */
 object Storage {
-    fun mediaRoot(context: Context): File {
+    /** The app's own folder on the phone. */
+    fun appRoot(context: Context): File {
         val base = context.getExternalFilesDir(null) ?: context.filesDir
         return File(base, "media").apply { mkdirs() }
     }
 
-    fun entryDir(context: Context, id: String) = File(mediaRoot(context), id)
+    /** The app's folder on an SD card, while one is in and mounted. */
+    fun sdCardRoot(context: Context): File? =
+        context.getExternalFilesDirs(null).drop(1).firstOrNull { dir ->
+            dir != null && runCatching {
+                Environment.isExternalStorageRemovable(dir) && Environment.getExternalStorageState(dir) == Environment.MEDIA_MOUNTED
+            }.getOrDefault(false)
+        }?.let { File(it, "media").apply { mkdirs() } }
+
+    /** Download/Tapedeck: Android 11 and later let an app put its own files there by path, no permission needed. */
+    val downloadsAvailable: Boolean get() = Build.VERSION.SDK_INT >= Build.VERSION_CODES.R
+
+    fun downloadsRoot(): File = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "Tapedeck")
+
+    /** Where a new download works: on the SD card when that is chosen (and in), else in the app folder. */
+    fun workRoot(context: Context, location: StorageLocation): File =
+        if (location == StorageLocation.SD_CARD) sdCardRoot(context) ?: appRoot(context) else appRoot(context)
+
+    /** The folder an entry works in; entries from before there was a choice have theirs in the app folder. */
+    fun entryDir(context: Context, entry: Entry): File = entry.folder?.let(::File) ?: File(appRoot(context), entry.id)
 
     fun deleteFiles(context: Context, entry: Entry) {
-        entryDir(context, entry.id).deleteRecursively()
-        entry.mediaFile?.let { File(it).parentFile?.takeIf { dir -> dir.name == entry.id }?.deleteRecursively() }
+        entryDir(context, entry).deleteRecursively()
+        entry.mediaFile?.let(::File)?.let { media ->
+            // A file in Download/Tapedeck lies outside the entry's folder.
+            if (media.exists()) media.delete()
+            media.parentFile?.takeIf { it.name == entry.id }?.deleteRecursively()
+        }
     }
 
-    fun usedBytes(context: Context): Long =
-        mediaRoot(context).walkBottomUp().filter { it.isFile }.sumOf { it.length() }
+    fun freeBytes(dir: File): Long = runCatching { StatFs(dir.apply { mkdirs() }.path).availableBytes }.getOrDefault(Long.MAX_VALUE)
 
-    fun freeBytes(context: Context): Long = runCatching { StatFs(mediaRoot(context).path).availableBytes }.getOrDefault(Long.MAX_VALUE)
+    /** Whether the entry's file already lies where [location] puts downloads. */
+    fun isIn(context: Context, entry: Entry, location: StorageLocation): Boolean {
+        val media = entry.mediaFile?.let(::File) ?: return true
+        return when (location) {
+            StorageLocation.DOWNLOADS -> media.parentFile == downloadsRoot()
+            StorageLocation.APP -> media.parentFile?.parentFile == appRoot(context)
+            StorageLocation.SD_CARD -> sdCardRoot(context)?.let { media.parentFile?.parentFile == it } ?: true
+        }
+    }
+
+    /**
+     * Puts a finished file into Download/Tapedeck under its title ("Big Buck Bunny.m4a", and "… (2).m4a" when
+     * that name is taken); null if it could not.
+     */
+    fun publish(media: File, title: String): File? {
+        val dir = downloadsRoot().apply { mkdirs() }
+        val target = freeName(dir, title, media.extension)
+        return target.takeIf { move(media, it) }
+    }
+
+    /** Where an entry's files went when moving it to [location] (null: left as it was). */
+    data class Moved(val mediaFile: String, val thumbnailFile: String?, val folder: String?)
+
+    /**
+     * Moves a finished download to [location]: its file to Download/Tapedeck, or its file and cover into its
+     * own folder in the app folder or on the SD card. The cover of a file in Download/Tapedeck stays with
+     * the app (file managers have no use for it).
+     */
+    fun relocate(context: Context, entry: Entry, location: StorageLocation): Moved? {
+        if (isIn(context, entry, location)) return null
+        val media = entry.mediaFile?.let(::File)?.takeIf { it.exists() } ?: return null
+        val cover = entry.thumbnailFile?.let(::File)?.takeIf { it.exists() }
+        if (location == StorageLocation.DOWNLOADS) {
+            val moved = publish(media, entry.title) ?: return null
+            return Moved(moved.path, cover?.path, entry.folder)
+        }
+        val root = (if (location == StorageLocation.SD_CARD) sdCardRoot(context) else appRoot(context)) ?: return null
+        val target = File(root, entry.id).apply { mkdirs() }
+        val newMedia = File(target, media.name)
+        if (!move(media, newMedia)) return null
+        val newCover = cover?.let { old -> File(target, old.name).takeIf { old == it || move(old, it) } ?: old }
+        // What is left of the old folder (it only held this entry's files).
+        val old = entryDir(context, entry)
+        if (old != target && old.name == entry.id) old.deleteRecursively()
+        return Moved(newMedia.path, newCover?.path, target.path)
+    }
+
+    private fun freeName(dir: File, title: String, extension: String): File {
+        val first = File(dir, fileNameFor(title, extension))
+        if (!first.exists()) return first
+        val base = first.nameWithoutExtension
+        return generateSequence(2) { it + 1 }.map { File(dir, "$base ($it).$extension") }.first { !it.exists() }
+    }
+
+    /** Renames where it can, copies (and deletes the original) across storage volumes. */
+    private fun move(from: File, to: File): Boolean {
+        if (from == to) return true
+        if (from.renameTo(to)) return true
+        return runCatching {
+            from.copyTo(to, overwrite = false)
+            from.delete()
+            true
+        }.getOrElse {
+            to.delete()
+            false
+        }
+    }
 
     fun mimeType(file: File): String {
         val ext = file.extension.lowercase()

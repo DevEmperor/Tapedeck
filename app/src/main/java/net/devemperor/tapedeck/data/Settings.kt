@@ -15,6 +15,13 @@ enum class ShareAction { ASK, DOWNLOAD_NOW }
 @Serializable
 enum class UpdateChannel { STABLE, NIGHTLY }
 
+/**
+ * Where downloads go: the app's own folder (as ever), Download/Tapedeck where file managers find them
+ * (Android 11 and later), or the app's folder on an SD card.
+ */
+@Serializable
+enum class StorageLocation { APP, DOWNLOADS, SD_CARD }
+
 /** Also the order in which "keep playing" continues, so a lecture series plays 1, 2, 3 with OLDEST. */
 @Serializable
 enum class LibrarySort { NEWEST, OLDEST, TITLE, LAST_PLAYED }
@@ -59,6 +66,16 @@ data class AppSettings(
     val protectMixtapes: Boolean = true,
     /** How often subscribed channels and playlists are looked at for new videos, in hours. */
     val subscriptionHours: Int = 3,
+    /** Where new downloads go. */
+    val storage: StorageLocation = StorageLocation.APP,
+    /** Subtitle languages put into downloaded videos ("de", "en" …); empty: none. */
+    val subtitleLangs: List<String> = emptyList(),
+    /** Also YouTube's automatic (generated, often translated) captions where there are no real ones. */
+    val autoSubtitles: Boolean = true,
+    /** Subtitles shown while a video plays (the CC button switches). */
+    val showSubtitles: Boolean = true,
+    /** The language picked last with the CC button, tried first. */
+    val subtitlePick: String? = null,
 ) {
     val autoDeleteAfterDays: Int get() = autoDeleteDays.coerceIn(AUTO_DELETE_MIN_DAYS, AUTO_DELETE_MAX_DAYS)
 
@@ -68,6 +85,12 @@ data class AppSettings(
         const val MAX_PARALLEL_DOWNLOADS = 5
         val REWIND_OPTIONS_SEC = listOf(0, 3, 5, 10, 30)
         val SUBSCRIPTION_HOURS = listOf(1, 2, 3, 4, 6, 8, 12, 24)
+
+        /** The subtitle languages offered (names come from the phone, in its own language). */
+        val SUBTITLE_LANGUAGES = listOf(
+            "de", "en", "fr", "es", "it", "nl", "pt", "pl", "cs", "sv", "da", "no", "fi", "hu", "ro", "el",
+            "ru", "uk", "tr", "ar", "he", "hi", "id", "vi", "zh", "ja", "ko",
+        )
     }
 }
 

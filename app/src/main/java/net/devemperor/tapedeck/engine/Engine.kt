@@ -168,10 +168,15 @@ object Engine {
 
     suspend fun download(context: Context, entry: Entry, settings: Settings, onLine: (String) -> Unit): YoutubeDLResponse {
         ensureInitialized(context)
-        val dir = Storage.entryDir(context, entry.id).apply { mkdirs() }
+        val dir = Storage.entryDir(context, entry).apply { mkdirs() }
         val request = YoutubeDLRequest(entry.url)
             .addOption("--cache-dir", cacheDir(context).absolutePath)
-            .addCommands(YtDlpArgs.download(entry.options, dir.absolutePath, settings.current.sponsorBlock))
+            .addCommands(
+                YtDlpArgs.download(
+                    entry.options, dir.absolutePath, settings.current.sponsorBlock,
+                    subtitles = entry.options.subtitleLanguages(settings.current), autoSubtitles = settings.current.autoSubtitles,
+                ),
+            )
         // The library always passes its own QuickJS as an option; a custom command comes later on the command
         // line, and yt-dlp keeps the last path given for a runtime, so this one wins.
         val engine = jsEngine(context, settings)

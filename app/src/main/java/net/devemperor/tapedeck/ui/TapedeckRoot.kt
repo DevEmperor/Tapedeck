@@ -52,6 +52,8 @@ fun TapedeckRoot(vm: MainViewModel) {
     var playerFullscreen by rememberSaveable { mutableStateOf(false) }
     // An open mixtape lies between the library and the player: closing the player returns to it.
     var openMixtape by rememberSaveable { mutableStateOf<String?>(null) }
+    // The history lies there too: a video played from it opens the player above it.
+    var historyOpen by rememberSaveable { mutableStateOf(false) }
     // Where the player was opened: a card in a list (its picture travels into the player and back) or,
     // with null, the mini player.
     var playerOrigin by rememberSaveable { mutableStateOf<String?>(null) }
@@ -101,8 +103,12 @@ fun TapedeckRoot(vm: MainViewModel) {
         }
     }
 
-    BackHandler(enabled = screen != Screen.LIBRARY || openMixtape != null) {
-        if (screen != Screen.LIBRARY) screen = Screen.LIBRARY else openMixtape = null
+    BackHandler(enabled = screen != Screen.LIBRARY || openMixtape != null || historyOpen) {
+        when {
+            screen != Screen.LIBRARY -> screen = Screen.LIBRARY
+            historyOpen -> historyOpen = false
+            else -> openMixtape = null
+        }
     }
 
     // Covers and cassettes travel between screens (see SharedElements.kt).
@@ -117,6 +123,7 @@ fun TapedeckRoot(vm: MainViewModel) {
             onOpenPlayerFrom = { openPlayer(origin = it) },
             onOpenFullscreen = { openPlayer(origin = null, fullscreen = true) },
             onOpenSettings = { screen = Screen.SETTINGS },
+            onOpenHistory = { historyOpen = true },
             onOpenMixtape = { openMixtape = it },
         )
         // Kept for the slide-out, after openMixtape is already null.
@@ -141,6 +148,16 @@ fun TapedeckRoot(vm: MainViewModel) {
                     onOpenFullscreen = { openPlayer(origin = null, fullscreen = true) },
                 )
             }
+        }
+        AnimatedVisibility(
+            historyOpen,
+            enter = slideInHorizontally(travelSpec()) { it } + fadeIn(travelSpec()),
+            exit = slideOutHorizontally(travelSpec()) { it } + fadeOut(travelSpec()),
+        ) {
+            HistoryScreen(vm, onBack = { historyOpen = false }, onPlay = { entry ->
+                vm.play(entry)
+                if (entry.isVideo) openPlayer(origin = null)
+            })
         }
         AnimatedVisibility(
             screen == Screen.PLAYER,
@@ -196,6 +213,8 @@ fun TapedeckRoot(vm: MainViewModel) {
             onSubscribe = vm::setSheetSubscribe,
             onKeep = vm::setSheetKeep,
             onLoadNow = vm::setSheetLoadNow,
+            subtitleDefaults = vm.settings.collectAsStateWithLifecycle().value.subtitleLangs,
+            onSubtitles = vm::setSheetSubtitles,
             onConfirm = {
                 askForNotifications()
                 vm.confirmSheet()

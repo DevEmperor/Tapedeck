@@ -4,13 +4,17 @@ import android.app.Activity
 import android.content.Context
 import android.content.pm.ActivityInfo
 import android.provider.Settings
+import android.util.TypedValue
 import android.view.LayoutInflater
 import android.view.OrientationEventListener
+import android.view.View
+import android.view.accessibility.CaptioningManager
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -91,6 +95,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -108,9 +113,11 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.view.WindowCompat
@@ -121,6 +128,7 @@ import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
+import androidx.media3.ui.SubtitleView
 import coil3.compose.AsyncImage
 import kotlinx.coroutines.delay
 import net.devemperor.tapedeck.Format
@@ -131,6 +139,7 @@ import net.devemperor.tapedeck.data.Entry
 import net.devemperor.tapedeck.player.PlayerUiState
 import java.io.File
 import kotlin.math.abs
+import kotlin.math.roundToInt
 
 private val SPEEDS = listOf(0.75f, 1f, 1.1f, 1.25f, 1.5f, 1.75f, 2f)
 
@@ -294,17 +303,22 @@ fun PlayerScreen(vm: MainViewModel, startFullscreen: Boolean = false, visibility
                         Modifier.sharedTransition(SharedKeys.artwork(entry.id), visibility)
                             .aspectRatio(aspect).shadow(18.dp, MaterialTheme.shapes.large).clip(MaterialTheme.shapes.large),
                     ) {
-                        VideoSurface(controller, Modifier.fillMaxSize(), texture = true)
+                        // Captions above the CC and full-screen buttons (48 dp + 6 dp margin), not behind them.
+                        VideoSurface(controller, Modifier.fillMaxSize(), texture = true, captionsAbove = 60.dp)
                         VideoCover(
                             entry, controller, state.isPlaying,
                             travelling = visibility?.transition?.let { it.currentState != it.targetState } == true,
                         )
                         // A double tap on the picture goes full screen, as the button does.
                         Box(Modifier.matchParentSize().pointerInput(Unit) { detectTapGestures(onDoubleTap = { enterFullscreen() }) })
-                        IconButton(
-                            onClick = ::enterFullscreen,
-                            modifier = Modifier.align(Alignment.BottomEnd).padding(6.dp).background(Color.Black.copy(alpha = 0.45f), CircleShape),
-                        ) { Icon(Icons.Rounded.Fullscreen, stringResource(R.string.fullscreen), tint = Color.White) }
+                        Row(Modifier.align(Alignment.BottomEnd).padding(6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            // CC only for a video that has subtitles.
+                            SubtitleButton(vm, state)
+                            IconButton(
+                                onClick = ::enterFullscreen,
+                                modifier = Modifier.background(Color.Black.copy(alpha = 0.45f), CircleShape),
+                            ) { Icon(Icons.Rounded.Fullscreen, stringResource(R.string.fullscreen), tint = Color.White) }
+                        }
                     }
                 }
             } else {
@@ -616,10 +630,11 @@ private fun BoxScope.VideoCover(entry: Entry, controller: Player?, playing: Bool
  */
 @androidx.annotation.OptIn(UnstableApi::class)
 @Composable
-private fun VideoSurface(controller: Player?, modifier: Modifier = Modifier, texture: Boolean = false) {
+private fun VideoSurface(controller: Player?, modifier: Modifier = Modifier, texture: Boolean = false, captionsAbove: Dp = 0.dp) {
+    val reserve = rememberUpdatedState(with(LocalDensity.current) { captionsAbove.toPx() })
     AndroidView(
         factory = { context ->
-            if (texture) {
+            val view = if (texture) {
                 LayoutInflater.from(context).inflate(R.layout.video_texture, null, false) as PlayerView
             } else {
                 PlayerView(context).apply {
@@ -628,11 +643,44 @@ private fun VideoSurface(controller: Player?, modifier: Modifier = Modifier, tex
                     setShutterBackgroundColor(android.graphics.Color.BLACK)
                 }
             }
+            // On every change of size (the shared transition), the captions follow.
+            view.addOnLayoutChangeListener { v, _, _, _, _, _, _, _, _ -> (v as PlayerView).liftCaptions(reserve.value) }
+            view
         },
-        update = { it.player = controller },
+        update = {
+            it.player = controller
+            it.liftCaptions(reserve.value)
+        },
         onRelease = { it.player = null },
         modifier = modifier.background(Color.Black),
     )
+}
+
+/**
+ * Keeps [reserve] px free below the player's own captions (for the buttons or controls on the picture).
+ * Padding moves every caption up, also those the file places itself (MP4 subtitles sit at 85 % of the
+ * height, where the bottom padding fraction does not reach). The text keeps the size it has on the whole
+ * picture (a fraction of its height, as the player's default), so it does not shrink with the padding.
+ */
+private fun PlayerView.liftCaptions(reserve: Float) {
+    val captions = subtitleView ?: return
+    if (height <= 0) return
+    val padding = reserve.roundToInt()
+    if (captions.paddingBottom != padding) {
+        captions.setPadding(0, 0, 0, padding)
+        // Its request for a new layout never gets through the AndroidView (22.11.2026: it stayed pending
+        // and the captions stayed where they were), so they lay themselves out again in their frame.
+        if (captions.width > 0 && captions.height > 0) {
+            captions.measure(
+                View.MeasureSpec.makeMeasureSpec(captions.width, View.MeasureSpec.EXACTLY),
+                View.MeasureSpec.makeMeasureSpec(captions.height, View.MeasureSpec.EXACTLY),
+            )
+            captions.layout(captions.left, captions.top, captions.right, captions.bottom)
+        }
+    }
+    val captioning = context.getSystemService(CaptioningManager::class.java)
+    val scale = if (captioning?.isEnabled == true) captioning.fontScale else 1f
+    captions.setFixedTextSize(TypedValue.COMPLEX_UNIT_PX, SubtitleView.DEFAULT_TEXT_SIZE_FRACTION * height * scale)
 }
 
 /**
@@ -698,7 +746,9 @@ private fun FullscreenVideo(vm: MainViewModel, controller: Player?, entry: Entry
     }
 
     Box(Modifier.fillMaxSize().background(Color.Black)) {
-        VideoSurface(controller, Modifier.fillMaxSize())
+        // While the controls show, the captions move up above the seek bar (as YouTube's do).
+        val captionsAbove by animateDpAsState(if (controls) 92.dp else 0.dp, tween(200), label = "captions")
+        VideoSurface(controller, Modifier.fillMaxSize(), captionsAbove = captionsAbove)
         // Above the picture and below the controls: their buttons and seek bar keep their own touches.
         Box(
             Modifier.fillMaxSize()
@@ -821,6 +871,8 @@ private fun FullscreenVideo(vm: MainViewModel, controller: Player?, entry: Entry
                                 onDrag = ::touched,
                             )
                         }
+                        val tracks by vm.player.state.collectAsStateWithLifecycle()
+                        SubtitleButton(vm, tracks)
                         IconButton(onClick = onExit) {
                             Icon(Icons.Rounded.FullscreenExit, stringResource(R.string.fullscreen_exit), tint = Color.White)
                         }
