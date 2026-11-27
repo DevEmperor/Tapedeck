@@ -10,7 +10,7 @@ plugins {
 // Single source of truth for the version: versionCode is derived as MAJOR*10000 + MINOR*100 + PATCH,
 // so every release only has to bump this string. `-Ptapedeck.version=0.0.1` builds an "old" version,
 // e.g. to see the update hint.
-val appVersionName = (findProperty("tapedeck.version") as String?) ?: "0.7.0"
+val appVersionName = (findProperty("tapedeck.version") as String?) ?: "0.7.1"
 val appVersionCode = appVersionName.split(".").map(String::toInt).let { (major, minor, patch) ->
     major * 10_000 + minor * 100 + patch
 }
