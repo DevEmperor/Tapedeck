@@ -584,7 +584,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun playFromStart(entry: Entry) = player.playFromStart(entry, entries.value.filter { it.id !in _pendingDeletes.value }, settings.value)
 
-    fun shareIntent(entry: Entry): Intent? = Storage.shareIntent(app, entry)
+    /** The share sheet for a download's file, or a message instead of a crash when it cannot be shared. */
+    fun shareIntent(entry: Entry): Intent? =
+        Storage.shareIntent(app, entry) ?: run { say(R.string.share_failed); null }
 
     fun export(entry: Entry) {
         viewModelScope.launch(Dispatchers.IO) {

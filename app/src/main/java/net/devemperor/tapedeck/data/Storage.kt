@@ -8,6 +8,7 @@ import android.os.Build
 import android.os.Environment
 import android.os.StatFs
 import android.provider.MediaStore
+import android.util.Log
 import android.webkit.MimeTypeMap
 import androidx.core.content.FileProvider
 import java.io.File
@@ -139,7 +140,10 @@ object Storage {
         // On disk every download is "media.mp4"; the receiving app gets the title as the file's name
         // ("Big Buck Bunny.mp4"), the way "Save to Downloads" names it.
         val name = fileNameFor(entry.title, file.extension)
-        val uri = FileProvider.getUriForFile(context, context.packageName + ".files", file, name)
+        // Throws for a file outside the places in xml/file_paths (an SD card did, up to 0.7.0): no crash.
+        val uri = runCatching { FileProvider.getUriForFile(context, context.packageName + ".files", file, name) }
+            .onFailure { Log.w("TapedeckStorage", "cannot share ${file.path}", it) }
+            .getOrNull() ?: return null
         val send = Intent(Intent.ACTION_SEND).apply {
             type = mimeType(file)
             putExtra(Intent.EXTRA_STREAM, uri)

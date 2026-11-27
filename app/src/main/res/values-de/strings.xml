@@ -93,6 +93,7 @@
     <string name="export">In Downloads speichern</string>
     <string name="exported">In Download/Tapedeck gespeichert</string>
     <string name="export_failed">Die Datei konnte nicht gespeichert werden</string>
+    <string name="share_failed">Die Datei konnte nicht geteilt werden</string>
     <string name="open_source">Original öffnen</string>
     <string name="nothing_finished">Noch nichts zu Ende gehört</string>
 

@@ -1,5 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Every place a download can be (Settings → Download location), so sharing works from each of them. -->
 <paths>
+    <!-- App folder: Tapedeck's folder on the phone (or in its internal storage without one). -->
     <external-files-path name="media" path="media/" />
     <files-path name="media_internal" path="media/" />
+    <!-- Download folder: Download/Tapedeck, named after the title. -->
+    <external-path name="downloads" path="Download/Tapedeck/" />
+    <!-- SD card: /storage/<card>/Android/data/<package>/files/media. FileProvider has no element for a
+         second volume (external-files-path is only the first), so this one starts at /storage. The provider
+         is not exported: other apps only read the single file Tapedeck shares with them. -->
+    <root-path name="volumes" path="storage/" />
 </paths>
