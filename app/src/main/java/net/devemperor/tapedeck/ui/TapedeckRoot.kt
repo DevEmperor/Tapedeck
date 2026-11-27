@@ -1,6 +1,7 @@
 package net.devemperor.tapedeck.ui
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import androidx.activity.compose.BackHandler
@@ -90,6 +91,7 @@ fun TapedeckRoot(vm: MainViewModel) {
         vm.events.collect { event ->
             when (event) {
                 is UiEvent.Message -> launch { snackbar.showSnackbar(event.render(context)) }
+                is UiEvent.Launch -> runCatching { context.startActivity(event.intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
                 is UiEvent.Deleted -> launch {
                     val count = event.ids.size
                     val result = snackbar.showSnackbar(

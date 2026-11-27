@@ -48,6 +48,7 @@ object Storage {
 
     fun deleteFiles(context: Context, entry: Entry) {
         entryDir(context, entry).deleteRecursively()
+        shareRoot(context).listFiles { file -> file.name.startsWith(entry.id + ".") }?.forEach { it.delete() }
         entry.mediaFile?.let(::File)?.let { media ->
             // A file in Download/Tapedeck lies outside the entry's folder.
             if (media.exists()) media.delete()
@@ -135,8 +136,58 @@ object Storage {
         }
     }
 
-    fun shareIntent(context: Context, entry: Entry): Intent? {
+    /** Copies of files from elsewhere, made in the app folder for sharing ([prepareShare]). */
+    private fun shareRoot(context: Context): File = File(context.getExternalFilesDir(null) ?: context.filesDir, "share")
+
+    private const val SHARE_COPY_MAX_AGE_MS = 24 * 60 * 60 * 1000L
+
+    /**
+     * The file to hand to another app for [entry]. WhatsApp shows the preview of a file from the SD card but
+     * then fails to send it ("something is wrong with the file"), while the very same file from the app
+     * folder goes through, and Dictate takes it from either (Galaxy A55, Android 17, WhatsApp 2.26.45,
+     * 27.11.2026). A file on the SD card reaches other apps through Android's FUSE layer, one in the app
+     * folder on the phone does not; Download/Tapedeck goes through FUSE as well, so it is treated the same
+     * (not tried with WhatsApp). A file from anywhere but the app folder is therefore copied there first
+     * ([onCopy] tells the user) and shared from that copy, which is what works; copies go after a day
+     * ([cleanShareCopies]). Without room for the copy the file is shared as it is.
+     */
+    fun prepareShare(context: Context, entry: Entry, onCopy: () -> Unit = {}): File? {
         val file = entry.mediaFile?.let(::File)?.takeIf { it.exists() } ?: return null
+        if (file.isWithin(appRoot(context))) return file
+        cleanShareCopies(context)
+        val dir = shareRoot(context).apply { mkdirs() }
+        val copy = File(dir, "${entry.id}.${file.extension}")
+        if (copy.exists() && copy.length() == file.length()) return copy.apply { setLastModified(System.currentTimeMillis()) }
+        if (freeBytes(dir) < file.length() + SHARE_SPARE_BYTES) return file
+        onCopy()
+        // Under another name until complete, so a copy cut short is never shared.
+        val part = File(dir, copy.name + ".part")
+        return runCatching {
+            file.copyTo(part, overwrite = true)
+            check(part.renameTo(copy)) { "rename failed" }
+            copy
+        }.getOrElse {
+            Log.w("TapedeckStorage", "cannot copy ${file.path} for sharing", it)
+            part.delete()
+            file
+        }
+    }
+
+    /** Removes the copies made for sharing that are older than a day (sharing one again renews it). */
+    fun cleanShareCopies(context: Context) = deleteOlderThanADay(shareRoot(context), System.currentTimeMillis())
+
+    internal fun deleteOlderThanADay(dir: File, now: Long) {
+        dir.listFiles()?.filter { now - it.lastModified() > SHARE_COPY_MAX_AGE_MS }?.forEach { it.delete() }
+    }
+
+    /** What stays free on the phone after a copy for sharing. */
+    private const val SHARE_SPARE_BYTES = 200L * 1024 * 1024
+
+    private fun File.isWithin(dir: File): Boolean =
+        runCatching { canonicalPath.startsWith(dir.canonicalPath + File.separator) }.getOrDefault(false)
+
+    /** The share sheet for [file], the entry's file itself or the copy [prepareShare] made of it. */
+    fun shareIntent(context: Context, entry: Entry, file: File): Intent? {
         // On disk every download is "media.mp4"; the receiving app gets the title as the file's name
         // ("Big Buck Bunny.mp4"), the way "Save to Downloads" names it.
         val name = fileNameFor(entry.title, file.extension)

@@ -4,6 +4,10 @@
     <!-- App folder: Tapedeck's folder on the phone (or in its internal storage without one). -->
     <external-files-path name="media" path="media/" />
     <files-path name="media_internal" path="media/" />
+    <!-- Copies in the app folder of files from the SD card and Download/Tapedeck, which WhatsApp cannot send
+         from where they are (Storage.prepareShare). -->
+    <external-files-path name="share" path="share/" />
+    <files-path name="share_internal" path="share/" />
     <!-- Download folder: Download/Tapedeck, named after the title. -->
     <external-path name="downloads" path="Download/Tapedeck/" />
     <!-- SD card: /storage/<card>/Android/data/<package>/files/media. FileProvider has no element for a

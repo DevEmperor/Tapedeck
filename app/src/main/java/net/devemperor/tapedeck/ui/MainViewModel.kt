@@ -21,6 +21,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import net.devemperor.tapedeck.R
 import net.devemperor.tapedeck.TapedeckApp
 import net.devemperor.tapedeck.data.AppSettings
@@ -102,6 +103,8 @@ data class ClipOffer(val url: String, val preview: PreviewInfo? = null)
 sealed interface UiEvent {
     class Message(val render: (Context) -> String) : UiEvent
     class Deleted(val ids: Set<String>) : UiEvent
+    /** An activity to start, e.g. the share sheet once the file is ready. */
+    class Launch(val intent: Intent) : UiEvent
 }
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
@@ -584,9 +587,23 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun playFromStart(entry: Entry) = player.playFromStart(entry, entries.value.filter { it.id !in _pendingDeletes.value }, settings.value)
 
-    /** The share sheet for a download's file, or a message instead of a crash when it cannot be shared. */
-    fun shareIntent(entry: Entry): Intent? =
-        Storage.shareIntent(app, entry) ?: run { say(R.string.share_failed); null }
+    private val sharing = mutableSetOf<String>()
+
+    /**
+     * Opens the share sheet for a download's file once it is ready — a file from the SD card or the Download
+     * folder is copied into the app folder first (Storage.prepareShare) — or says why it cannot be shared.
+     */
+    fun share(entry: Entry) {
+        if (!sharing.add(entry.id)) return
+        viewModelScope.launch {
+            val intent = withContext(Dispatchers.IO) {
+                Storage.prepareShare(app, entry, onCopy = { say(R.string.share_preparing) })
+                    ?.let { Storage.shareIntent(app, entry, it) }
+            }
+            sharing.remove(entry.id)
+            if (intent == null) say(R.string.share_failed) else _events.tryEmit(UiEvent.Launch(intent))
+        }
+    }
 
     fun export(entry: Entry) {
         viewModelScope.launch(Dispatchers.IO) {

@@ -9,6 +9,7 @@ import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import net.devemperor.tapedeck.TapedeckApp
 import net.devemperor.tapedeck.data.AutoDelete
+import net.devemperor.tapedeck.data.Storage
 import net.devemperor.tapedeck.player.NowPlaying
 import java.util.concurrent.TimeUnit
 
@@ -33,6 +34,7 @@ object Maintenance {
     }
 
     fun cleanUp(app: TapedeckApp): Int {
+        Storage.cleanShareCopies(app)
         val settings = app.settings.current
         val protected = if (settings.protectMixtapes) app.library.onMixtapes() else emptySet()
         val victims = AutoDelete.victims(app.library.entries.value, settings, System.currentTimeMillis(), NowPlaying.entryId, protected)

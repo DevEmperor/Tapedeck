@@ -1,6 +1,5 @@
 package net.devemperor.tapedeck.ui
 
-import android.content.Intent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.animateColorAsState
@@ -970,7 +969,6 @@ fun EntryMenu(
     onPlayFromStart: () -> Unit = { vm.playFromStart(entry) },
     top: @Composable ColumnScope.() -> Unit = {},
 ) {
-    val context = LocalContext.current
     val uriHandler = LocalUriHandler.current
     var picking by remember { mutableStateOf(false) }
     DropdownMenu(expanded, onDismissRequest = onDismiss) {
@@ -979,10 +977,7 @@ fun EntryMenu(
         MenuItem(Icons.AutoMirrored.Rounded.PlaylistAdd, R.string.mixtape_add) { onDismiss(); picking = true }
         MenuItem(Icons.Rounded.DoneAll, if (entry.finished) R.string.mark_unheard else R.string.mark_heard) { onDismiss(); vm.toggleFinished(entry) }
         MenuItem(Icons.Rounded.PushPin, if (entry.keep) R.string.unkeep else R.string.keep) { onDismiss(); vm.toggleKeep(entry) }
-        MenuItem(Icons.Rounded.Share, R.string.share_file) {
-            onDismiss()
-            vm.shareIntent(entry)?.let { context.startActivity(it.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
-        }
+        MenuItem(Icons.Rounded.Share, R.string.share_file) { onDismiss(); vm.share(entry) }
         MenuItem(Icons.Rounded.SaveAlt, R.string.export) { onDismiss(); vm.export(entry) }
         MenuItem(Icons.AutoMirrored.Rounded.OpenInNew, R.string.open_source) { onDismiss(); runCatching { uriHandler.openUri(entry.url) } }
         HorizontalDivider()

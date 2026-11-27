@@ -95,6 +95,7 @@
     <string name="exported">Saved to Download/Tapedeck</string>
     <string name="export_failed">Could not save the file</string>
     <string name="share_failed">Could not share the file</string>
+    <string name="share_preparing">Getting the file ready to share…</string>
     <string name="open_source">Open original</string>
     <string name="nothing_finished">Nothing heard to the end yet</string>
 
